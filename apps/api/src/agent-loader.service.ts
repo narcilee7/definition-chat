@@ -1,9 +1,12 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
+import { createLogger } from '@ohme/observability';
 import { PrismaService } from './prisma/prisma.service';
 import { globalRegistry, AgentPersona, MemoryType } from '@ohme/agent-framework';
 
 @Injectable()
 export class AgentLoaderService implements OnModuleInit {
+  private readonly logger = createLogger('AgentLoaderService');
+
   constructor(private prisma: PrismaService) {}
 
   async onModuleInit() {
@@ -20,6 +23,6 @@ export class AgentLoaderService implements OnModuleInit {
     }));
 
     globalRegistry.registerMany(personas);
-    console.log(`[AgentFramework] Loaded ${personas.length} agents into registry`);
+    this.logger.info(`Loaded ${personas.length} agents into registry`);
   }
 }

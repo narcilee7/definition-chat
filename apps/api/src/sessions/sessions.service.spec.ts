@@ -90,9 +90,9 @@ describe('SessionsService', () => {
   });
 
   it('should find all sessions ordered by updatedAt desc', async () => {
-    const s1 = await service.create({ title: 'First' });
+    await service.create({ title: 'First' });
     await new Promise((r) => setTimeout(r, 10));
-    const s2 = await service.create({ title: 'Second' });
+    await service.create({ title: 'Second' });
 
     const all = await service.findAll();
     expect(all).toHaveLength(2);

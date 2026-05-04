@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { createLogger } from '@ohme/observability';
 import { PrismaService } from '../prisma/prisma.service';
 import { SessionsService } from '../sessions/sessions.service';
 import { InsightEngine } from '../insight/insight.engine';
@@ -10,6 +11,8 @@ const provider = LLMProviderFactory.create(ProviderName.SiliconFlow);
 
 @Injectable()
 export class ChatService {
+  private readonly logger = createLogger('ChatService');
+
   constructor(
     private prisma: PrismaService,
     private sessions: SessionsService,
@@ -40,11 +43,14 @@ export class ChatService {
     await this.sessions.addMessage(dto.sessionId, 'assistant', fullContent);
 
     setImmediate(() => {
-      this.insight.processSession(dto.sessionId).catch(console.error);
+      this.insight.processSession(dto.sessionId).catch((err) => {
+        this.logger.error('Insight processing failed', { sessionId: dto.sessionId, error: err });
+      });
     });
   }
 
   async chat(dto: ChatDto) {
+    this.logger.info('Chat request', { sessionId: dto.sessionId });
     await this.sessions.addMessage(dto.sessionId, 'user', dto.content);
 
     const systemPrompt = await this.buildSystemPrompt();
@@ -63,9 +69,12 @@ export class ChatService {
     const message = await this.sessions.addMessage(dto.sessionId, 'assistant', res.content);
 
     setImmediate(() => {
-      this.insight.processSession(dto.sessionId).catch(console.error);
+      this.insight.processSession(dto.sessionId).catch((err) => {
+        this.logger.error('Insight processing failed', { sessionId: dto.sessionId, error: err });
+      });
     });
 
+    this.logger.info('Chat completed', { sessionId: dto.sessionId, messageId: message.id });
     return { message };
   }
 

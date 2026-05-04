@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { createLogger } from '@ohme/observability';
 import { globalRegistry, MemoryType } from '@ohme/agent-framework';
 import { AgentsService } from '../agents/agents.service';
 import { SessionsService } from '../sessions/sessions.service';
@@ -55,12 +56,15 @@ const BUILDER_PERSONA = {
 
 @Injectable()
 export class BuilderService {
+  private readonly logger = createLogger('BuilderService');
+
   constructor(
     private agents: AgentsService,
     private sessions: SessionsService,
   ) {
     // Register builder persona
     globalRegistry.register(BUILDER_PERSONA);
+    this.logger.info('Builder persona registered');
   }
 
   async chat(dto: BuilderChatDto) {
@@ -89,6 +93,7 @@ export class BuilderService {
       response.content,
     );
 
+    this.logger.info('Builder chat completed', { sessionId: dto.sessionId, hasDraft: !!draft });
     return { message, draft };
   }
 
@@ -123,6 +128,7 @@ export class BuilderService {
       maxTokens: 512,
     });
 
+    this.logger.info('Agent confirmed via builder', { agentId: agent.id, name: agent.name });
     return agent;
   }
 

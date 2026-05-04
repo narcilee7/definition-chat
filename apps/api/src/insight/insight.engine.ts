@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { createLogger } from '@ohme/observability';
 import { PrismaService } from '../prisma/prisma.service';
 import { LLMProviderFactory, ProviderName } from '@ohme/agent-framework';
 import {
@@ -21,6 +22,8 @@ interface ExtractedNotes {
 
 @Injectable()
 export class InsightEngine {
+  private readonly logger = createLogger('InsightEngine');
+
   constructor(private prisma: PrismaService) {}
 
   async processSession(sessionId: string) {
@@ -33,6 +36,8 @@ export class InsightEngine {
     const transcript = session.messages
       .map((m) => `${m.role === 'user' ? '用户' : '引导者'}：${m.content}`)
       .join('\n\n');
+
+    this.logger.info('Processing session insight', { sessionId });
 
     try {
       // 1. Generate session notes
@@ -57,8 +62,10 @@ export class InsightEngine {
 
       // 3. Update user context
       await this.updateUserContext(transcript, notes);
+
+      this.logger.info('Session insight completed', { sessionId, notesLength: notes.length });
     } catch (err) {
-      console.error('[InsightEngine] processSession failed:', err);
+      this.logger.error('processSession failed', { sessionId, error: err });
     }
   }
 

@@ -34,6 +34,8 @@ export { CircuitBreaker } from './retry/circuit-breaker';
 // Observability
 export { EventBus, globalEventBus } from './observability/event-bus';
 export { MetricsCollector } from './observability/metrics';
+export { setGlobalLogger, getGlobalLogger, createLogger, ConsoleLogger } from '@ohme/observability';
+export type { Logger, LogLevel } from '@ohme/observability';
 
 // Tools
 export { ToolRegistry, globalToolRegistry } from './tools/registry';

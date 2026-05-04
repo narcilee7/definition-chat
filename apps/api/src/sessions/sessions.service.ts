@@ -1,9 +1,12 @@
 import { Injectable } from '@nestjs/common';
+import { createLogger } from '@ohme/observability';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateSessionDto } from './dto/create-session.dto';
 
 @Injectable()
 export class SessionsService {
+  private readonly logger = createLogger('SessionsService');
+
   constructor(private prisma: PrismaService) {}
 
   async create(dto: CreateSessionDto) {
@@ -14,6 +17,7 @@ export class SessionsService {
         mood: dto.mood,
       },
     });
+    this.logger.info('Session created', { sessionId: session.id, title: session.title });
     return session;
   }
 
@@ -38,6 +42,7 @@ export class SessionsService {
       where: { id: sessionId },
       data: { updatedAt: new Date() },
     });
+    this.logger.debug('Message added', { sessionId, role, messageId: message.id });
     return message;
   }
 

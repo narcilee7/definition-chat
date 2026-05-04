@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { InsightEngine } from './insight.engine';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -9,7 +9,7 @@ function createMockPrisma() {
 
   return {
     session: {
-      findUnique: async ({ where, include }: any) => {
+      findUnique: async ({ where }: any) => {
         const s = sessions.find((s) => s.id === where.id);
         if (!s) return null;
         return { ...s, messages: s.messages || [] };
