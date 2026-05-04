@@ -1,14 +1,15 @@
-import { IsString, IsArray, IsOptional } from 'class-validator';
+import { IsString, IsOptional } from 'class-validator';
 
 export class CreateSessionDto {
   @IsString()
-  mode: string;
-
-  @IsArray()
-  @IsString({ each: true })
-  agentIds: string[];
+  @IsOptional()
+  title?: string;
 
   @IsString()
   @IsOptional()
-  title?: string;
+  intent?: string;
+
+  @IsString()
+  @IsOptional()
+  mood?: string;
 }
