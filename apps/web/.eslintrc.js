@@ -1,7 +1,8 @@
 /** @type {import("eslint").Linter.Config} */
 module.exports = {
-  extends: ["@ohme/config/eslint-next.js"],
-  parserOptions: {
-    project: true,
+  extends: ["next/core-web-vitals", "prettier"],
+  rules: {
+    "@next/next/no-html-link-for-pages": "off",
+    "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_" }],
   },
 };
