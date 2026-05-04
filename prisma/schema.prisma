@@ -1,0 +1,59 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Agent {
+  id                 String   @id @default(cuid())
+  name               String
+  role               String
+  tone               String
+  color              String
+  description        String
+  coreTraits         Json     @map("core_traits")
+  communicationStyle String   @map("communication_style")
+  expertise          String[]
+  backgroundStory    String?  @map("background_story")
+  openingStyle       String   @map("opening_style")
+  lengthPreference   String   @map("length_preference")
+  forbiddenTopics    String[] @map("forbidden_topics")
+  systemPrompt       String   @map("system_prompt")
+  isBuiltIn          Boolean  @default(false) @map("is_built_in")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  sessions Session[]
+
+  @@map("agents")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  title     String?
+  mode      String // single | multi | build
+  agentIds  String[] @map("agent_ids")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  messages Message[]
+  agents   Agent[]
+
+  @@map("sessions")
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  role      String // user | agent | system | builder
+  content   String
+  agentId   String?  @map("agent_id")
+  sessionId String   @map("session_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@map("messages")
+}

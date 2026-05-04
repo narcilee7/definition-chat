@@ -1,0 +1,11 @@
+{
+  "extends": "@ohme/config/tsconfig.nest.json",
+  "compilerOptions": {
+    "baseUrl": "./",
+    "paths": {
+      "@ohme/types": ["../../packages/types/src"]
+    }
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
+}
