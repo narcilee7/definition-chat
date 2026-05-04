@@ -8,7 +8,6 @@ import { BuilderModule } from './builder/builder.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { InsightModule } from './insight/insight.module';
 import { AgentLoaderService } from './agent-loader.service';
-import { LLMFallbackService } from './llm/llm-fallback.service';
 
 @Module({
   imports: [
@@ -21,6 +20,6 @@ import { LLMFallbackService } from './llm/llm-fallback.service';
     BuilderModule,
     InsightModule,
   ],
-  providers: [AgentLoaderService, LLMFallbackService],
+  providers: [AgentLoaderService],
 })
 export class AppModule {}
