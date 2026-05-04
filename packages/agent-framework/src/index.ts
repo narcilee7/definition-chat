@@ -4,6 +4,9 @@ export { Agent } from './agent';
 export { AgentRegistry, globalRegistry } from './registry';
 export { loadConfig, getConfig, setConfig } from './config';
 
+// Streaming
+export { parseSSEStream } from './streaming';
+
 // Providers
 export { LLMProviderFactory } from './providers/factory';
 export { BaseProvider } from './providers/base';
@@ -23,3 +26,11 @@ export { SQLiteMemory } from './memory/sqlite';
 export { parallelExecute } from './orchestrator/parallel';
 export { sequentialExecute } from './orchestrator/sequential';
 export { debateExecute } from './orchestrator/debate';
+
+// Retry
+export { withRetry, withRetryGenerator, isRetryableError } from './retry/retry';
+export { CircuitBreaker } from './retry/circuit-breaker';
+
+// Observability
+export { EventBus, globalEventBus } from './observability/event-bus';
+export { MetricsCollector } from './observability/metrics';

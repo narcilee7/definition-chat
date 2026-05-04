@@ -1,4 +1,5 @@
-import { LLMProvider, ChatMessage, ChatOptions, ProviderConfig } from '../types';
+import { LLMProvider, ChatMessage, ChatOptions, ProviderConfig, StreamChunk } from '../types';
+import { parseSSEStream } from '../streaming';
 
 interface OpenAIFormatResponse {
   choices?: Array<{
@@ -45,9 +46,7 @@ export abstract class BaseProvider implements LLMProvider {
 
       if (!res.ok) {
         const err = (await res.json().catch(() => ({}))) as OpenAIFormatResponse;
-        throw new Error(
-          err.error?.message || `${this.name} API error: ${res.status}`
-        );
+        throw new Error(err.error?.message || `${this.name} API error: ${res.status}`);
       }
 
       const data = (await res.json()) as OpenAIFormatResponse;
@@ -60,6 +59,48 @@ export abstract class BaseProvider implements LLMProvider {
       clearTimeout(timeout);
       if (err instanceof Error && err.name === 'AbortError') {
         throw new Error(`${this.name} request timeout`);
+      }
+      throw err;
+    }
+  }
+
+  async *stream(messages: ChatMessage[], options?: ChatOptions): AsyncGenerator<StreamChunk> {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), options?.timeoutMs ?? 15000);
+
+    try {
+      const res = await fetch(`${this.config.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${this.config.apiKey}`,
+          Accept: 'text/event-stream',
+        },
+        body: JSON.stringify({
+          model: this.config.model,
+          messages,
+          temperature: options?.temperature ?? 0.7,
+          max_tokens: options?.maxTokens ?? 512,
+          top_p: options?.topP ?? 0.9,
+          stream: true,
+        }),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeout);
+
+      if (!res.ok) {
+        const err = (await res.json().catch(() => ({}))) as OpenAIFormatResponse;
+        throw new Error(err.error?.message || `${this.name} stream error: ${res.status}`);
+      }
+
+      for await (const chunk of parseSSEStream(res)) {
+        yield chunk;
+      }
+    } catch (err) {
+      clearTimeout(timeout);
+      if (err instanceof Error && err.name === 'AbortError') {
+        throw new Error(`${this.name} stream timeout`);
       }
       throw err;
     }

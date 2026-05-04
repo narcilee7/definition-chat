@@ -14,9 +14,15 @@ export interface ChatOptions {
   timeoutMs?: number;
 }
 
+export interface StreamChunk {
+  content: string;
+  done: boolean;
+}
+
 export interface LLMProvider {
   readonly name: string;
   chat(messages: ChatMessage[], options?: ChatOptions): Promise<string>;
+  stream?(messages: ChatMessage[], options?: ChatOptions): AsyncIterable<StreamChunk>;
 }
 
 export interface MemoryMessage {
