@@ -3,24 +3,24 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
 model Agent {
   id                 String   @id @default(cuid())
-  name               String
+  name               String   @unique
   role               String
   tone               String
   color              String
   description        String
-  coreTraits         Json     @map("core_traits")
+  coreTraits         String   @map("core_traits") // JSON string
   communicationStyle String   @map("communication_style")
-  expertise          String[]
+  expertise          String   @map("expertise") // JSON string array
   backgroundStory    String?  @map("background_story")
   openingStyle       String   @map("opening_style")
   lengthPreference   String   @map("length_preference")
-  forbiddenTopics    String[] @map("forbidden_topics")
+  forbiddenTopics    String   @map("forbidden_topics") // JSON string array
   systemPrompt       String   @map("system_prompt")
   isBuiltIn          Boolean  @default(false) @map("is_built_in")
   createdAt          DateTime @default(now()) @map("created_at")
@@ -35,7 +35,7 @@ model Session {
   id        String   @id @default(cuid())
   title     String?
   mode      String // single | multi | build
-  agentIds  String[] @map("agent_ids")
+  agentIds  String   @map("agent_ids") // JSON string array
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
