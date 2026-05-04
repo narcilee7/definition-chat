@@ -1,4 +1,5 @@
 import { AgentEvent } from './event-bus';
+import { EventType } from '../types';
 
 export interface MetricsSnapshot {
   totalChats: number;
@@ -9,10 +10,6 @@ export interface MetricsSnapshot {
   agentCalls: Record<string, number>;
 }
 
-/**
- * Simple in-memory metrics collector
- * Attach to EventBus to collect runtime metrics
- */
 export class MetricsCollector {
   private stats = {
     totalChats: 0,
@@ -25,11 +22,10 @@ export class MetricsCollector {
 
   handle(event: AgentEvent): void {
     switch (event.type) {
-      case 'chat:end':
+      case EventType.ChatEnd:
         this.stats.totalChats++;
         if (event.latencyMs) {
           this.stats.latencies.push(event.latencyMs);
-          // Keep last 1000
           if (this.stats.latencies.length > 1000) {
             this.stats.latencies = this.stats.latencies.slice(-1000);
           }
@@ -40,18 +36,18 @@ export class MetricsCollector {
         }
         break;
 
-      case 'chat:error':
+      case EventType.ChatError:
         this.stats.totalErrors++;
         break;
 
-      case 'provider:success':
+      case EventType.ProviderSuccess:
         if (event.provider) {
           const count = this.stats.providerCalls.get(event.provider) || 0;
           this.stats.providerCalls.set(event.provider, count + 1);
         }
         break;
 
-      case 'provider:error':
+      case EventType.ProviderError:
         if (event.provider) {
           const count = this.stats.providerErrors.get(event.provider) || 0;
           this.stats.providerErrors.set(event.provider, count + 1);

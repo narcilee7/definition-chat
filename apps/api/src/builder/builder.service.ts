@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { globalRegistry } from '@ohme/agent-framework';
+import { globalRegistry, MemoryType } from '@ohme/agent-framework';
 import { AgentsService } from '../agents/agents.service';
 import { SessionsService } from '../sessions/sessions.service';
 import { BuilderChatDto, ConfirmAgentDto } from './dto/builder-chat.dto';
@@ -50,7 +50,7 @@ const BUILDER_PERSONA = {
   color: '#7C3AED',
   temperature: 0.8,
   maxTokens: 800,
-  memory: { type: 'buffer' as const, maxMessages: 30 },
+  memory: { type: MemoryType.Buffer, maxMessages: 30 },
 };
 
 @Injectable()

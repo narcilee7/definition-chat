@@ -1,14 +1,4 @@
-// ============================================================
-// OhMe Agent Framework — Agent State Machine
-// ============================================================
-
-export type AgentState =
-  | 'idle'       // 等待输入
-  | 'thinking'   // 正在处理
-  | 'calling_tool' // 正在调用工具
-  | 'streaming'  // 正在流式输出
-  | 'error'      // 发生错误
-  | 'paused';    // 暂停（如等待用户确认）
+import { AgentState } from '../types';
 
 export interface StateTransition {
   from: AgentState;
@@ -19,11 +9,8 @@ export interface StateTransition {
 
 export type StateChangeHandler = (from: AgentState, to: AgentState, trigger?: string) => void;
 
-/**
- * AgentStateMachine — 管理 Agent 的生命周期状态
- */
 export class AgentStateMachine {
-  private state: AgentState = 'idle';
+  private state: AgentState = AgentState.Idle;
   private history: StateTransition[] = [];
   private handlers = new Set<StateChangeHandler>();
 
@@ -32,7 +19,11 @@ export class AgentStateMachine {
   }
 
   get isBusy(): boolean {
-    return this.state === 'thinking' || this.state === 'calling_tool' || this.state === 'streaming';
+    return (
+      this.state === AgentState.Thinking ||
+      this.state === AgentState.CallingTool ||
+      this.state === AgentState.Streaming
+    );
   }
 
   transition(to: AgentState, trigger?: string): void {
@@ -43,7 +34,6 @@ export class AgentStateMachine {
     const transition: StateTransition = { from, to, trigger, timestamp: Date.now() };
     this.history.push(transition);
 
-    // Keep last 100 transitions
     if (this.history.length > 100) {
       this.history = this.history.slice(-100);
     }
@@ -52,7 +42,7 @@ export class AgentStateMachine {
       try {
         h(from, to, trigger);
       } catch {
-        // ignore handler errors
+        // ignore
       }
     }
   }
@@ -67,7 +57,7 @@ export class AgentStateMachine {
   }
 
   reset(): void {
-    this.state = 'idle';
+    this.state = AgentState.Idle;
     this.history = [];
   }
 }

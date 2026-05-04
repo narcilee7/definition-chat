@@ -1,9 +1,7 @@
 import { AgentStateMachine } from './state-machine';
 import { globalEventBus } from '../observability/event-bus';
+import { EventType } from '../types';
 
-/**
- * LifecycleHooks — Agent 生命周期钩子
- */
 export interface LifecycleHooks {
   onInit?: () => void | Promise<void>;
   onBeforeChat?: (message: string) => void | Promise<void>;
@@ -22,40 +20,35 @@ export class AgentLifecycle {
   }
 
   async init(): Promise<void> {
-    this.stateMachine.transition('idle', 'init');
-    globalEventBus.emitQuick('agent:init');
+    this.stateMachine.transition(this.stateMachine.current, 'init');
+    globalEventBus.emitQuick(EventType.AgentInit);
     await this.callHook('onInit');
   }
 
   async beforeChat(message: string): Promise<void> {
-    this.stateMachine.transition('thinking', 'before_chat');
     await this.callHook('onBeforeChat', message);
   }
 
   async afterChat(message: string, response: string): Promise<void> {
-    this.stateMachine.transition('idle', 'after_chat');
     await this.callHook('onAfterChat', message, response);
   }
 
   async onToolCall(toolName: string, params: Record<string, unknown>): Promise<void> {
-    this.stateMachine.transition('calling_tool', 'tool_call');
-    globalEventBus.emitQuick('tool:call', {
+    globalEventBus.emitQuick(EventType.ToolCall, {
       metadata: { toolName, params },
     });
     await this.callHook('onToolCall', toolName, params);
   }
 
   async onError(error: Error): Promise<void> {
-    this.stateMachine.transition('error', 'error');
-    globalEventBus.emitQuick('agent:error', { error: error.message });
+    globalEventBus.emitQuick(EventType.AgentError, { error: error.message });
     await this.callHook('onError', error);
-    // Auto recover to idle after error
-    setTimeout(() => this.stateMachine.transition('idle', 'recover'), 100);
+    setTimeout(() => this.stateMachine.transition(this.stateMachine.current, 'recover'), 100);
   }
 
   async destroy(): Promise<void> {
     await this.callHook('onDestroy');
-    globalEventBus.emitQuick('agent:destroy');
+    globalEventBus.emitQuick(EventType.AgentDestroy);
   }
 
   private async callHook<K extends keyof LifecycleHooks>(

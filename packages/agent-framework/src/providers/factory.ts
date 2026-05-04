@@ -12,15 +12,15 @@ export class LLMProviderFactory {
     const name = (providerName || config.defaultProvider) as ProviderName;
 
     switch (name) {
-      case 'siliconflow':
+      case ProviderName.SiliconFlow:
         return new SiliconFlowProvider();
-      case 'deepseek':
+      case ProviderName.DeepSeek:
         return new DeepSeekProvider();
-      case 'groq':
+      case ProviderName.Groq:
         return new GroqProvider();
-      case 'openrouter':
+      case ProviderName.OpenRouter:
         return new OpenRouterProvider();
-      case 'openai-compatible':
+      case ProviderName.OpenAICompatible:
         return new OpenAICompatibleProvider();
       default:
         return new OpenAICompatibleProvider({ name });
@@ -28,6 +28,6 @@ export class LLMProviderFactory {
   }
 
   static list(): ProviderName[] {
-    return ['siliconflow', 'deepseek', 'groq', 'openrouter', 'openai-compatible'];
+    return Object.values(ProviderName);
   }
 }

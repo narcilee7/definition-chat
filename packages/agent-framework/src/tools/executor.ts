@@ -1,6 +1,7 @@
 import { ToolRegistry } from './registry';
 import { ToolCall, ToolResult } from './types';
 import { globalEventBus } from '../observability/event-bus';
+import { EventType } from '../types';
 
 export class ToolExecutor {
   private registry: ToolRegistry;
@@ -24,7 +25,7 @@ export class ToolExecutor {
         continue;
       }
 
-      globalEventBus.emitQuick('tool:call', {
+      globalEventBus.emitQuick(EventType.ToolCall, {
         metadata: { toolName: call.name, arguments: call.arguments },
       });
 
@@ -33,7 +34,7 @@ export class ToolExecutor {
         const result = await Promise.resolve(tool.execute(call.arguments));
         const latency = Date.now() - start;
 
-        globalEventBus.emitQuick('tool:success', {
+        globalEventBus.emitQuick(EventType.ToolSuccess, {
           metadata: { toolName: call.name, latencyMs: latency },
         });
 
@@ -44,7 +45,7 @@ export class ToolExecutor {
         });
       } catch (err) {
         const error = err instanceof Error ? err.message : String(err);
-        globalEventBus.emitQuick('tool:error', {
+        globalEventBus.emitQuick(EventType.ToolError, {
           error,
           metadata: { toolName: call.name },
         });

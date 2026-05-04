@@ -46,11 +46,18 @@ export { generateJSON, extractStructured } from './structured-output';
 export type { JSONSchema } from './structured-output';
 
 // Vector Memory
-export { VectorMemoryStore, simpleEmbed, cosineSimilarity } from './vector-memory';
-export type { EmbeddedDocument } from './vector-memory';
+export { VectorMemoryStore, cosineSimilarity } from './vector-memory/store';
+export type { EmbeddedDocument } from './vector-memory/store';
+export {
+  EmbeddingProviderFactory,
+  SiliconFlowEmbeddingProvider,
+  OpenAIEmbeddingProvider,
+  LocalEmbeddingProvider,
+} from './vector-memory/embedding-provider';
+export type { EmbeddingProvider } from './vector-memory/embedding-provider';
 
 // State Machine
 export { AgentStateMachine } from './state/state-machine';
 export { AgentLifecycle } from './state/lifecycle';
-export type { AgentState, StateTransition } from './state/state-machine';
+export type { StateTransition } from './state/state-machine';
 export type { LifecycleHooks } from './state/lifecycle';

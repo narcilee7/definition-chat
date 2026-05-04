@@ -2,6 +2,50 @@
 // OhMe Agent Framework — Core Types
 // ============================================================
 
+export enum MemoryType {
+  Buffer = 'buffer',
+  Window = 'window',
+  SQLite = 'sqlite',
+}
+
+export enum ProviderName {
+  SiliconFlow = 'siliconflow',
+  DeepSeek = 'deepseek',
+  Groq = 'groq',
+  OpenRouter = 'openrouter',
+  OpenAICompatible = 'openai-compatible',
+}
+
+export enum AgentState {
+  Idle = 'idle',
+  Thinking = 'thinking',
+  CallingTool = 'calling_tool',
+  Streaming = 'streaming',
+  Error = 'error',
+  Paused = 'paused',
+}
+
+export enum EventType {
+  ChatStart = 'chat:start',
+  ChatEnd = 'chat:end',
+  ChatError = 'chat:error',
+  ChatStream = 'chat:stream',
+  ProviderCall = 'provider:call',
+  ProviderSuccess = 'provider:success',
+  ProviderError = 'provider:error',
+  ProviderCircuitOpen = 'provider:circuit-open',
+  MemoryRead = 'memory:read',
+  MemoryWrite = 'memory:write',
+  RegistryRegister = 'registry:register',
+  RegistryRemove = 'registry:remove',
+  ToolCall = 'tool:call',
+  ToolSuccess = 'tool:success',
+  ToolError = 'tool:error',
+  AgentInit = 'agent:init',
+  AgentError = 'agent:error',
+  AgentDestroy = 'agent:destroy',
+}
+
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';
   content: string | null;
@@ -53,8 +97,6 @@ export interface Memory {
   clear(): Promise<void>;
 }
 
-export type MemoryType = 'buffer' | 'window' | 'sqlite';
-
 export interface MemoryConfig {
   type: MemoryType;
   maxMessages?: number;
@@ -86,13 +128,6 @@ export interface MultiAgentRequest {
   userMessage: string;
   mode: 'parallel' | 'sequential' | 'debate';
 }
-
-export type ProviderName =
-  | 'siliconflow'
-  | 'deepseek'
-  | 'groq'
-  | 'openrouter'
-  | 'openai-compatible';
 
 export interface ProviderConfig {
   apiKey: string;

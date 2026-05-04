@@ -1,4 +1,4 @@
-import { AgentPersona, ChatMessage, Memory, MemoryMessage, AgentResponse, StreamChunk } from './types';
+import { AgentPersona, ChatMessage, Memory, MemoryMessage, AgentResponse, StreamChunk, MemoryType, AgentState, EventType } from './types';
 import { LLMProviderFactory } from './providers/factory';
 import { MemoryFactory } from './memory/factory';
 import { withRetry } from './retry/retry';
@@ -24,7 +24,7 @@ export class Agent {
   constructor(persona: AgentPersona, tools?: Tool[]) {
     this.persona = persona;
     this.provider = LLMProviderFactory.create(persona.provider);
-    this.memory = MemoryFactory.create(persona.memory ?? { type: 'buffer', maxMessages: 20 });
+    this.memory = MemoryFactory.create(persona.memory ?? { type: MemoryType.Buffer, maxMessages: 20 });
     this.circuitBreaker = new CircuitBreaker();
     this.toolRegistry = new ToolRegistry();
     this.toolExecutor = new ToolExecutor(this.toolRegistry);
@@ -54,10 +54,10 @@ export class Agent {
 
   async chat(userMessage: string, history?: ChatMessage[]): Promise<AgentResponse> {
     const start = Date.now();
-    this._stateMachine.transition('thinking', 'chat');
+    this._stateMachine.transition(AgentState.Thinking, 'chat');
     await this._lifecycle.beforeChat(userMessage);
 
-    globalEventBus.emitQuick('chat:start', {
+    globalEventBus.emitQuick(EventType.ChatStart, {
       agentId: this.persona.id,
       agentName: this.persona.name,
     });
@@ -88,7 +88,7 @@ export class Agent {
         }
 
         // Execute tools
-        this._stateMachine.transition('calling_tool', 'tool_call');
+        this._stateMachine.transition(AgentState.CallingTool, 'tool_call');
         const parsedCalls = toolCalls.map((tc) => ({
           id: tc.id,
           name: tc.name,
@@ -122,15 +122,15 @@ export class Agent {
       await this.saveToMemory(userMessage, finalContent);
       const latencyMs = Date.now() - start;
 
-      this._stateMachine.transition('idle', 'chat_complete');
+      this._stateMachine.transition(AgentState.Idle, 'chat_complete');
       await this._lifecycle.afterChat(userMessage, finalContent);
 
-      globalEventBus.emitQuick('chat:end', {
+      globalEventBus.emitQuick(EventType.ChatEnd, {
         agentId: this.persona.id,
         agentName: this.persona.name,
         latencyMs,
       });
-      globalEventBus.emitQuick('provider:success', { provider: this.provider.name });
+      globalEventBus.emitQuick(EventType.ProviderSuccess, { provider: this.provider.name });
 
       return {
         content: finalContent,
@@ -140,15 +140,15 @@ export class Agent {
       };
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
-      this._stateMachine.transition('error', 'chat_error');
+      this._stateMachine.transition(AgentState.Error, 'chat_error');
       await this._lifecycle.onError(err instanceof Error ? err : new Error(error));
 
-      globalEventBus.emitQuick('chat:error', {
+      globalEventBus.emitQuick(EventType.ChatError, {
         agentId: this.persona.id,
         agentName: this.persona.name,
         error,
       });
-      globalEventBus.emitQuick('provider:error', {
+      globalEventBus.emitQuick(EventType.ProviderError, {
         provider: this.provider.name,
         error,
       });
@@ -160,8 +160,8 @@ export class Agent {
     userMessage: string,
     history?: ChatMessage[],
   ): AsyncGenerator<StreamChunk> {
-    this._stateMachine.transition('streaming', 'stream');
-    globalEventBus.emitQuick('chat:start', {
+    this._stateMachine.transition(AgentState.Streaming, 'stream');
+    globalEventBus.emitQuick(EventType.ChatStream, {
       agentId: this.persona.id,
       agentName: this.persona.name,
     });
@@ -180,7 +180,7 @@ export class Agent {
         if (!chunk.done) {
           fullContent += chunk.content;
         }
-        globalEventBus.emitQuick('chat:stream', {
+        globalEventBus.emitQuick(EventType.ChatStream, {
           agentId: this.persona.id,
           agentName: this.persona.name,
           content: chunk.content,
@@ -189,17 +189,17 @@ export class Agent {
       }
 
       await this.saveToMemory(userMessage, fullContent);
-      this._stateMachine.transition('idle', 'stream_complete');
+      this._stateMachine.transition(AgentState.Idle, 'stream_complete');
 
-      globalEventBus.emitQuick('chat:end', {
+      globalEventBus.emitQuick(EventType.ChatEnd, {
         agentId: this.persona.id,
         agentName: this.persona.name,
       });
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
-      this._stateMachine.transition('error', 'stream_error');
+      this._stateMachine.transition(AgentState.Error, 'stream_error');
       await this._lifecycle.onError(err instanceof Error ? err : new Error(error));
-      globalEventBus.emitQuick('chat:error', {
+      globalEventBus.emitQuick(EventType.ChatError, {
         agentId: this.persona.id,
         agentName: this.persona.name,
         error,
@@ -210,9 +210,9 @@ export class Agent {
 
   async chatWithContext(contextMessages: ChatMessage[], userMessage: string): Promise<AgentResponse> {
     const start = Date.now();
-    this._stateMachine.transition('thinking', 'chat_context');
+    this._stateMachine.transition(AgentState.Thinking, 'chat_context');
 
-    globalEventBus.emitQuick('chat:start', {
+    globalEventBus.emitQuick(EventType.ChatStart, {
       agentId: this.persona.id,
       agentName: this.persona.name,
     });
@@ -236,9 +236,9 @@ export class Agent {
       );
 
       const latencyMs = Date.now() - start;
-      this._stateMachine.transition('idle', 'chat_context_complete');
+      this._stateMachine.transition(AgentState.Idle, 'chat_context_complete');
 
-      globalEventBus.emitQuick('chat:end', {
+      globalEventBus.emitQuick(EventType.ChatEnd, {
         agentId: this.persona.id,
         agentName: this.persona.name,
         latencyMs,
@@ -252,9 +252,9 @@ export class Agent {
       };
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
-      this._stateMachine.transition('error', 'chat_context_error');
+      this._stateMachine.transition(AgentState.Error, 'chat_context_error');
       await this._lifecycle.onError(err instanceof Error ? err : new Error(error));
-      globalEventBus.emitQuick('chat:error', {
+      globalEventBus.emitQuick(EventType.ChatError, {
         agentId: this.persona.id,
         agentName: this.persona.name,
         error,

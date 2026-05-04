@@ -1,3 +1,2 @@
-export { simpleEmbed, cosineSimilarity } from './embedding';
-export { VectorMemoryStore } from './store';
-export type { EmbeddedDocument } from './embedding';
+export { VectorMemoryStore, cosineSimilarity } from './store';
+export type { EmbeddedDocument } from './store';

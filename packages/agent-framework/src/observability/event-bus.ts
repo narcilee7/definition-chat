@@ -1,27 +1,7 @@
-// ============================================================
-// OhMe Agent Framework — Event Bus (Observability)
-// ============================================================
+import { EventType } from '../types';
 
 export interface AgentEvent {
-  type:
-    | 'chat:start'
-    | 'chat:end'
-    | 'chat:error'
-    | 'chat:stream'
-    | 'provider:call'
-    | 'provider:success'
-    | 'provider:error'
-    | 'provider:circuit-open'
-    | 'memory:read'
-    | 'memory:write'
-    | 'registry:register'
-    | 'registry:remove'
-    | 'tool:call'
-    | 'tool:success'
-    | 'tool:error'
-    | 'agent:init'
-    | 'agent:error'
-    | 'agent:destroy';
+  type: EventType;
   agentId?: string;
   agentName?: string;
   provider?: string;
@@ -35,10 +15,10 @@ export interface AgentEvent {
 export type EventHandler = (event: AgentEvent) => void;
 
 export class EventBus {
-  private handlers = new Map<string, Set<EventHandler>>();
+  private handlers = new Map<EventType, Set<EventHandler>>();
   private wildcardHandlers = new Set<EventHandler>();
 
-  on(eventType: string, handler: EventHandler): () => void {
+  on(eventType: EventType, handler: EventHandler): () => void {
     if (!this.handlers.has(eventType)) {
       this.handlers.set(eventType, new Set());
     }
@@ -51,12 +31,11 @@ export class EventBus {
     return () => this.wildcardHandlers.delete(handler);
   }
 
-  off(eventType: string, handler: EventHandler): void {
+  off(eventType: EventType, handler: EventHandler): void {
     this.handlers.get(eventType)?.delete(handler);
   }
 
   emit(event: AgentEvent): void {
-    // Specific handlers
     const specific = this.handlers.get(event.type);
     if (specific) {
       for (const h of specific) {
@@ -68,7 +47,6 @@ export class EventBus {
       }
     }
 
-    // Wildcard handlers
     for (const h of this.wildcardHandlers) {
       try {
         h(event);
@@ -78,7 +56,7 @@ export class EventBus {
     }
   }
 
-  emitQuick(type: AgentEvent['type'], payload?: Partial<Omit<AgentEvent, 'type' | 'timestamp'>>): void {
+  emitQuick(type: EventType, payload?: Partial<Omit<AgentEvent, 'type' | 'timestamp'>>): void {
     this.emit({
       type,
       timestamp: Date.now(),
@@ -87,5 +65,4 @@ export class EventBus {
   }
 }
 
-// Singleton
 export const globalEventBus = new EventBus();
