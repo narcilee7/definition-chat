@@ -1,40 +1,39 @@
 import { Injectable } from '@nestjs/common';
-import { LlmService } from '../shared/llm.service';
+import { globalRegistry } from '../agent-framework';
 import { AgentsService } from '../agents/agents.service';
 import { SessionsService } from '../sessions/sessions.service';
 import { BuilderChatDto, ConfirmAgentDto } from './dto/builder-chat.dto';
 
-const BUILDER_SYSTEM_PROMPT = `你是 "OhMe Builder"，一个专门帮助用户创建内在人格Agent的AI助手。
+const BUILDER_PERSONA = {
+  id: '__builder__',
+  name: 'OhMe Builder',
+  description: 'Agent构建助手',
+  systemPrompt: `你是 "OhMe Builder"，一个专门帮助用户创建内在人格Agent的AI助手。
 
-你的任务是通过自然对话，引导用户定义一个全新的Agent人格。你不是在问表单问题，而是在聊天中自然地收集信息。
+你的任务是通过自然对话，引导用户定义一个全新的Agent人格。
 
-你需要收集以下信息（但不要一次性问完，要循序渐进）：
-
-1. **名称** — 这个Agent叫什么？（如：守护者、质疑者、童年自己）
-2. **角色定位** — 它是用户的内在声音，还是外部角色？（inner_analyst, healer, challenger, intuitive, companion, mentor, custom）
-3. **说话语气** — 它说话是什么感觉？（analytical, warm, sharp, intuitive, playful, grounded）
-4. **核心能力** — 它最擅长什么？（帮用户处理什么问题）
+需要收集的信息（循序渐进，不要一次性问完）：
+1. **名称** — 这个Agent叫什么？
+2. **角色定位** — inner_analyst / healer / challenger / intuitive / companion / mentor / custom
+3. **说话语气** — analytical / warm / sharp / intuitive / playful / grounded
+4. **核心能力** — 它最擅长处理什么问题？
 5. **沟通风格** — 它怎么说话？（直接/委婉/诗意/结构化...）
-6. **背景故事** — 这个Agent从哪里来？有什么经历让它变成这样？
+6. **背景故事** — 这个Agent从哪里来？
 7. **开场白风格** — 它第一次回应用户时会怎么说？
-8. **回应长度** — 它喜欢说长话还是短话？
+8. **回应长度** — minimal / concise / moderate / detailed
 9. **禁忌话题** — 它绝对不会说什么？
 
 对话策略：
-- 第一次聊天时，先打个招呼，简单说明你可以帮用户创建Agent
-- 不要像问卷一样问问题，要像朋友聊天一样引导
-- 当用户提到某个特征时，自然地追问细节
-- 当你觉得信息够了，可以生成一个draft并询问用户是否满意
-- 如果用户不满意，继续调整
-- 每次只聚焦1-2个维度，不要 overwhelm 用户
+- 像朋友聊天一样引导，不要像问卷
+- 每次只聚焦1-2个维度
+- 当信息足够时，生成 draft
 
-生成draft时，用以下格式：
-
+生成draft格式：
 ---DRAFT---
 名称：xxx
 角色：xxx
 语气：xxx
-颜色：xxx（从蓝色、紫色、绿色、红色、琥珀色、青色、粉色、靛蓝中选一个）
+颜色：xxx（从 #2563EB, #7C3AED, #059669, #DC2626, #D97706, #0891B2, #BE185D, #4338CA 中选）
 描述：一句话描述
 核心特质：
 - xxx
@@ -43,46 +42,42 @@ const BUILDER_SYSTEM_PROMPT = `你是 "OhMe Builder"，一个专门帮助用户�
 擅长领域：xxx, xxx, xxx
 背景故事：xxx
 开场白：xxx
-回应长度：minimal/concise/moderate/detailed
+回应长度：concise/moderate/detailed
 禁忌：xxx, xxx
 ---END---
 
-语气：温暖、好奇、有耐心。像一位创意搭档，而不是面试官。`;
+语气：温暖、好奇、有耐心。像创意搭档。`,
+  color: '#7C3AED',
+  temperature: 0.8,
+  maxTokens: 800,
+  memory: { type: 'buffer' as const, maxMessages: 30 },
+};
 
 @Injectable()
 export class BuilderService {
   constructor(
-    private llm: LlmService,
     private agents: AgentsService,
     private sessions: SessionsService,
-  ) {}
+  ) {
+    // Register builder persona
+    globalRegistry.register(BUILDER_PERSONA);
+  }
 
   async chat(dto: BuilderChatDto) {
+    const builder = globalRegistry.getAgent('__builder__');
+
     // Save user message
     await this.sessions.addMessage(dto.sessionId, 'user', dto.content);
 
     // Get session history
     const session = await this.sessions.findOne(dto.sessionId);
-    const history = session?.messages || [];
+    const history = (session?.messages || [])
+      .filter((m: any) => m.role === 'user' || m.role === 'builder')
+      .slice(-20)
+      .map((m: any) => ({ role: m.role === 'user' ? 'user' : 'assistant' as 'user' | 'assistant', content: m.content }));
 
-    // Build LLM messages
-    const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
-      { role: 'system', content: BUILDER_SYSTEM_PROMPT },
-    ];
-
-    for (const msg of history.slice(-30)) {
-      if (msg.role === 'user') {
-        messages.push({ role: 'user', content: msg.content });
-      } else if (msg.role === 'agent' || msg.role === 'builder') {
-        messages.push({ role: 'assistant', content: msg.content });
-      }
-    }
-
-    messages.push({ role: 'user', content: dto.content });
-
-    // Call LLM
-    const response = await this.llm.chat(messages, 800);
-    if (!response.content) throw new Error('Empty LLM response');
+    // Chat through Agent Framework
+    const response = await builder.chatWithContext(history, dto.content);
 
     // Extract draft if present
     const draft = this.extractDraft(response.content);
@@ -98,7 +93,6 @@ export class BuilderService {
   }
 
   async confirm(dto: ConfirmAgentDto) {
-    // Generate system prompt from the draft
     const systemPrompt = this.generateSystemPrompt(dto);
 
     const agent = await this.agents.create({
@@ -118,6 +112,17 @@ export class BuilderService {
       isBuiltIn: false,
     });
 
+    // Register in Agent Framework
+    globalRegistry.register({
+      id: agent.id,
+      name: agent.name,
+      description: agent.description,
+      systemPrompt,
+      color: agent.color,
+      temperature: 0.7,
+      maxTokens: 512,
+    });
+
     return agent;
   }
 
@@ -133,7 +138,7 @@ export class BuilderService {
       if (colonIdx > 0) {
         const key = line.slice(0, colonIdx).trim();
         const value = line.slice(colonIdx + 1).trim();
-        draft[key] = value;
+        if (value) draft[key] = value;
       }
     }
 
@@ -146,8 +151,8 @@ export class BuilderService {
     const forbidden = this.safeJsonParse(dto.forbiddenTopics, []);
 
     const traitsText = Array.isArray(traits)
-      ? traits.map((t: any) => `- ${t.key}：${t.value}`).join('\n')
-      : '';
+      ? traits.map((t: any) => `- ${t.key || '特质'}：${t.value || t}`).join('\n')
+      : String(traits);
 
     const lengthMap: Record<string, string> = {
       minimal: '每次回应不超过1句话',

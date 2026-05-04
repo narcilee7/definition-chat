@@ -6,6 +6,7 @@ import { SessionsModule } from './sessions/sessions.module';
 import { BuilderModule } from './builder/builder.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { SharedModule } from './shared/shared.module';
+import { AgentLoaderService } from './agent-framework/agent-loader.service';
 
 @Module({
   imports: [
@@ -17,5 +18,6 @@ import { SharedModule } from './shared/shared.module';
     ChatModule,
     BuilderModule,
   ],
+  providers: [AgentLoaderService],
 })
 export class AppModule {}

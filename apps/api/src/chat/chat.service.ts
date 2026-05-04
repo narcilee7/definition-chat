@@ -1,35 +1,27 @@
 import { Injectable } from '@nestjs/common';
-import { LlmService } from '../shared/llm.service';
-import { AgentsService } from '../agents/agents.service';
+import { globalRegistry, parallelExecute, Agent } from '../agent-framework';
 import { SessionsService } from '../sessions/sessions.service';
 import { ChatDto, MultiChatDto } from './dto/chat.dto';
 
 @Injectable()
 export class ChatService {
-  constructor(
-    private llm: LlmService,
-    private agents: AgentsService,
-    private sessions: SessionsService,
-  ) {}
+  constructor(private sessions: SessionsService) {}
 
   async chat(dto: ChatDto) {
-    const agent = await this.agents.findOne(dto.agentId);
-    if (!agent) throw new Error('Agent not found');
+    const agent = globalRegistry.getAgent(dto.agentId);
 
     // Save user message
     await this.sessions.addMessage(dto.sessionId, 'user', dto.content);
 
-    // Get session history
+    // Get history for context (but not from memory since Agent handles its own)
     const session = await this.sessions.findOne(dto.sessionId);
-    const history = session?.messages || [];
+    const history = (session?.messages || [])
+      .filter((m: any) => m.role === 'user' || m.role === 'agent')
+      .slice(-10)
+      .map((m: any) => ({ role: m.role as 'user' | 'assistant', content: m.content }));
 
-    // Build LLM messages
-    const llmMessages = this.buildLlmMessages(agent.systemPrompt, history);
-    llmMessages.push({ role: 'user' as const, content: dto.content });
-
-    // Call LLM
-    const response = await this.llm.chat(llmMessages);
-    if (!response.content) throw new Error('Empty LLM response');
+    // Chat through Agent Framework
+    const response = await agent.chatWithContext(history, dto.content);
 
     // Save agent message
     const message = await this.sessions.addMessage(
@@ -46,60 +38,42 @@ export class ChatService {
     // Save user message once
     await this.sessions.addMessage(dto.sessionId, 'user', dto.content);
 
-    // Get session history
-    const session = await this.sessions.findOne(dto.sessionId);
-    const history = session?.messages || [];
-
-    // Parallel calls for each agent
-    const promises = dto.agentIds.map(async (agentId) => {
+    // Get agents
+    const agents: Agent[] = [];
+    for (const id of dto.agentIds) {
       try {
-        const agent = await this.agents.findOne(agentId);
-        if (!agent) throw new Error(`Agent ${agentId} not found`);
-
-        const llmMessages = this.buildLlmMessages(agent.systemPrompt, history);
-        llmMessages.push({
-          role: 'user' as const,
-          content: `[多Agent模式] 用户的问题：${dto.content}`,
-        });
-
-        const response = await this.llm.chat(llmMessages, 400);
-
-        const message = await this.sessions.addMessage(
-          dto.sessionId,
-          'agent',
-          response.content,
-          agentId,
-        );
-        return message;
-      } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : 'Agent failed to respond';
-        const message = await this.sessions.addMessage(
-          dto.sessionId,
-          'agent',
-          `[${agentId}] ${errorMsg}`,
-          agentId,
-        );
-        return message;
-      }
-    });
-
-    const messages = await Promise.all(promises);
-    return { messages };
-  }
-
-  private buildLlmMessages(systemPrompt: string, history: any[]) {
-    const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
-      { role: 'system', content: systemPrompt },
-    ];
-
-    for (const msg of history.slice(-20)) {
-      if (msg.role === 'user') {
-        messages.push({ role: 'user', content: msg.content });
-      } else if (msg.role === 'agent') {
-        messages.push({ role: 'assistant', content: msg.content });
+        agents.push(globalRegistry.getAgent(id));
+      } catch {
+        // Agent not found, skip
       }
     }
 
-    return messages;
+    // Get shared history
+    const session = await this.sessions.findOne(dto.sessionId);
+    const history = (session?.messages || [])
+      .filter((m: any) => m.role === 'user' || m.role === 'agent')
+      .slice(-10)
+      .map((m: any) => ({ role: m.role as 'user' | 'assistant', content: m.content }));
+
+    // Parallel execution through Orchestrator
+    const results = await parallelExecute(
+      agents,
+      `[多Agent模式] ${dto.content}`,
+      history
+    );
+
+    // Save all responses
+    const messages = [];
+    for (const res of results) {
+      const msg = await this.sessions.addMessage(
+        dto.sessionId,
+        'agent',
+        res.content,
+        res.agentId,
+      );
+      messages.push(msg);
+    }
+
+    return { messages };
   }
 }
