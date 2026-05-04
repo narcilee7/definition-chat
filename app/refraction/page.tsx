@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { BUILTIN_STANCES, getStanceById } from '@/lib/definition';
+import { getStanceById } from '@/lib/definition';
 import { STANCE_COLORS, STANCE_LABELS } from '@/types';
 import { cn } from '@/lib/utils';
 
@@ -160,10 +160,13 @@ function RefractionContent() {
               <div
                 key={result.stanceId}
                 className={cn(
-                  'flex-shrink-0 w-full md:w-[320px] bg-white rounded-xl border border-[#e7e5e4] overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-lg',
-                  counterpointFirst === result.stanceId && 'ring-2 ring-offset-2'
+                  'flex-shrink-0 w-full md:w-[320px] bg-white rounded-xl border border-[#e7e5e4] overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-lg'
                 )}
-                style={counterpointFirst === result.stanceId ? { ringColor: color } : undefined}
+                style={
+                  counterpointFirst === result.stanceId
+                    ? { boxShadow: `0 0 0 2px ${color}, 0 0 0 4px #FAFAF9` }
+                    : undefined
+                }
               >
                 {/* Color band */}
                 <div className="h-1 w-full" style={{ backgroundColor: color }} />

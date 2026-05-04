@@ -22,6 +22,7 @@ export default function DivePage() {
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const hasInitiated = useRef(false);
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -38,9 +39,14 @@ export default function DivePage() {
 
   // Send initial question if coming from refraction
   useEffect(() => {
-    if (question && messages.length === 0) {
-      handleSend(question);
+    if (question && !hasInitiated.current) {
+      hasInitiated.current = true;
+      // Use setTimeout to avoid react-hooks/exhaustive-deps issue with handleSend
+      setTimeout(() => {
+        handleSend(question);
+      }, 0);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [question]);
 
   const handleSend = async (text: string) => {
