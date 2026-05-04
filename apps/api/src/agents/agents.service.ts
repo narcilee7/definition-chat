@@ -1,9 +1,12 @@
 import { Injectable } from '@nestjs/common';
+import { createLogger } from '@ohme/observability';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateAgentDto } from './dto/create-agent.dto';
 
 @Injectable()
 export class AgentsService {
+  private readonly logger = createLogger('AgentsService');
+
   constructor(private prisma: PrismaService) {}
 
   async findAll() {
@@ -44,11 +47,13 @@ export class AgentsService {
         isBuiltIn: dto.isBuiltIn ?? false,
       },
     });
+    this.logger.info('Agent created', { agentId: agent.id, name: agent.name });
     return this.serializeAgent(agent);
   }
 
   async remove(id: string) {
     await this.prisma.agent.delete({ where: { id } });
+    this.logger.info('Agent removed', { agentId: id });
     return { success: true };
   }
 

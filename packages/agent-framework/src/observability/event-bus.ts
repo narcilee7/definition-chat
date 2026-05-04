@@ -1,4 +1,5 @@
 import { EventType } from '../types';
+import { getGlobalLogger } from '@ohme/observability';
 
 export interface AgentEvent {
   type: EventType;
@@ -42,7 +43,7 @@ export class EventBus {
         try {
           h(event);
         } catch (err) {
-          console.error(`[EventBus] Handler error for ${event.type}:`, err);
+          getGlobalLogger().error(`[EventBus] Handler error for ${event.type}:`, { error: err });
         }
       }
     }
@@ -51,7 +52,7 @@ export class EventBus {
       try {
         h(event);
       } catch (err) {
-        console.error(`[EventBus] Wildcard handler error:`, err);
+        getGlobalLogger().error(`[EventBus] Wildcard handler error:`, { error: err });
       }
     }
   }

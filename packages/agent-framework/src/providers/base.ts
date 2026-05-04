@@ -1,6 +1,7 @@
 import { LLMProvider, ChatMessage, ChatOptions, ProviderConfig, StreamChunk } from '../types';
 import { parseSSEStream } from '../streaming';
 import { Tool } from '../tools/types';
+import { getGlobalLogger } from '@ohme/observability';
 
 interface OpenAIFormatResponse {
   choices?: Array<{
@@ -24,6 +25,7 @@ interface OpenAIFormatResponse {
 export abstract class BaseProvider implements LLMProvider {
   abstract readonly name: string;
   protected config: ProviderConfig;
+  protected logger = getGlobalLogger();
 
   constructor(config: ProviderConfig) {
     this.config = config;
@@ -34,8 +36,13 @@ export abstract class BaseProvider implements LLMProvider {
     options?: ChatOptions,
     tools?: Tool[],
   ): Promise<{ content: string; toolCalls?: Array<{ id: string; name: string; arguments: string }> }> {
+    const startTime = Date.now();
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), options?.timeoutMs ?? 15000);
+
+    this.logger.debug(
+      `[LLM] ${this.name} chat start — model=${this.config.model}, messages=${messages.length}`,
+    );
 
     try {
       const body: Record<string, unknown> = {
@@ -85,9 +92,19 @@ export abstract class BaseProvider implements LLMProvider {
         arguments: tc.function.arguments,
       }));
 
+      const latency = Date.now() - startTime;
+      this.logger.info(
+        `[LLM] ${this.name} chat success — model=${this.config.model}, latency=${latency}ms, contentLength=${content.length}`,
+      );
+
       return { content, toolCalls };
     } catch (err) {
       clearTimeout(timeout);
+      const latency = Date.now() - startTime;
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      this.logger.error(
+        `[LLM] ${this.name} chat failed — model=${this.config.model}, latency=${latency}ms, error=${errorMsg}`,
+      );
       if (err instanceof Error && err.name === 'AbortError') {
         throw new Error(`${this.name} request timeout`);
       }
@@ -96,8 +113,13 @@ export abstract class BaseProvider implements LLMProvider {
   }
 
   async *stream(messages: ChatMessage[], options?: ChatOptions): AsyncGenerator<StreamChunk> {
+    const startTime = Date.now();
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), options?.timeoutMs ?? 15000);
+
+    this.logger.debug(
+      `[LLM] ${this.name} stream start — model=${this.config.model}, messages=${messages.length}`,
+    );
 
     try {
       const res = await fetch(`${this.config.baseUrl}/chat/completions`, {
@@ -125,11 +147,23 @@ export abstract class BaseProvider implements LLMProvider {
         throw new Error(err.error?.message || `${this.name} stream error: ${res.status}`);
       }
 
+      let chunkCount = 0;
       for await (const chunk of parseSSEStream(res)) {
+        chunkCount++;
         yield chunk;
       }
+
+      const latency = Date.now() - startTime;
+      this.logger.info(
+        `[LLM] ${this.name} stream success — model=${this.config.model}, latency=${latency}ms, chunks=${chunkCount}`,
+      );
     } catch (err) {
       clearTimeout(timeout);
+      const latency = Date.now() - startTime;
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      this.logger.error(
+        `[LLM] ${this.name} stream failed — model=${this.config.model}, latency=${latency}ms, error=${errorMsg}`,
+      );
       if (err instanceof Error && err.name === 'AbortError') {
         throw new Error(`${this.name} stream timeout`);
       }
