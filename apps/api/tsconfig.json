@@ -1,6 +1,7 @@
 {
   "extends": "@ohme/config/tsconfig.nest.json",
   "compilerOptions": {
+    "outDir": "./dist",
     "baseUrl": "./",
     "strictPropertyInitialization": false,
     "paths": {
