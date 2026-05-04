@@ -19,6 +19,7 @@
     "@nestjs/platform-express": "^10.3.0",
     "@nestjs/config": "^3.1.0",
     "@ohme/agent-framework": "workspace:*",
+    "@ohme/prompts": "workspace:*",
     "@ohme/types": "workspace:*",
     "@prisma/client": "^5.10.0",
     "class-transformer": "^0.5.1",

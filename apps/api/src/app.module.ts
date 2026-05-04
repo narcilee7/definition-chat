@@ -5,6 +5,7 @@ import { ChatModule } from './chat/chat.module';
 import { SessionsModule } from './sessions/sessions.module';
 import { BuilderModule } from './builder/builder.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { InsightModule } from './insight/insight.module';
 import { AgentLoaderService } from './agent-loader.service';
 
 @Module({
@@ -15,6 +16,7 @@ import { AgentLoaderService } from './agent-loader.service';
     SessionsModule,
     ChatModule,
     BuilderModule,
+    InsightModule,
   ],
   providers: [AgentLoaderService],
 })

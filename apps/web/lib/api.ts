@@ -12,36 +12,30 @@ async function fetchJson<T>(path: string, options?: RequestInit): Promise<T> {
   return res.json();
 }
 
-// Agents
 export const api = {
-  agents: {
-    list: () => fetchJson<any[]>("/api/agents"),
-    get: (id: string) => fetchJson<any>(`/api/agents/${id}`),
-    create: (data: unknown) =>
-      fetchJson<any>("/api/agents", { method: "POST", body: JSON.stringify(data) }),
-    delete: (id: string) =>
-      fetchJson<any>(`/api/agents/${id}`, { method: "DELETE" }),
-  },
-
   sessions: {
     list: () => fetchJson<any[]>("/api/sessions"),
     get: (id: string) => fetchJson<any>(`/api/sessions/${id}`),
-    create: (data: { mode: string; agentIds: string[]; title?: string }) =>
-      fetchJson<any>("/api/sessions", { method: "POST", body: JSON.stringify(data) }),
+    create: (data?: { title?: string; intent?: string; mood?: string }) =>
+      fetchJson<any>("/api/sessions", { method: "POST", body: JSON.stringify(data || {}) }),
   },
 
   chat: {
-    send: (data: { sessionId: string; agentId: string; content: string }) =>
-      fetchJson<any>("/api/chat", { method: "POST", body: JSON.stringify(data) }),
-    multi: (data: { sessionId: string; agentIds: string[]; content: string }) =>
-      fetchJson<any>("/api/chat/multi", { method: "POST", body: JSON.stringify(data) }),
-    stream: (data: { sessionId: string; agentId: string; content: string }) => {
+    stream: (data: { sessionId: string; content: string }) => {
       return fetch(`${API_BASE}/api/chat/stream`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
     },
+  },
+
+  memory: {
+    list: () => fetchJson<any[]>("/api/memory-notes"),
+  },
+
+  context: {
+    get: () => fetchJson<any>("/api/user-context"),
   },
 
   builder: {

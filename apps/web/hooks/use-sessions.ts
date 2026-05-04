@@ -4,8 +4,9 @@ import { api } from "@/lib/api";
 export interface Session {
   id: string;
   title: string;
-  mode: string;
-  agentIds: string[];
+  intent?: string;
+  mood?: string;
+  notes?: string;
   createdAt: string;
   updatedAt: string;
 }

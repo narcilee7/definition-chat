@@ -1,11 +1,13 @@
 {
   "extends": "@ohme/config/tsconfig.nest.json",
   "compilerOptions": {
+    "outDir": "./dist",
     "baseUrl": "./",
     "strictPropertyInitialization": false,
     "paths": {
       "@ohme/types": ["../../packages/types/src"],
-      "@ohme/agent-framework": ["../../packages/agent-framework/dist"]
+      "@ohme/agent-framework": ["../../packages/agent-framework/dist"],
+      "@ohme/prompts": ["../../packages/prompts/dist"]
     }
   },
   "include": ["src/**/*"],

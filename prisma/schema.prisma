@@ -14,46 +14,70 @@ model Agent {
   tone               String
   color              String
   description        String
-  coreTraits         String   @map("core_traits") // JSON string
+  coreTraits         String   @map("core_traits")
   communicationStyle String   @map("communication_style")
-  expertise          String   @map("expertise") // JSON string array
+  expertise          String   @map("expertise")
   backgroundStory    String?  @map("background_story")
   openingStyle       String   @map("opening_style")
   lengthPreference   String   @map("length_preference")
-  forbiddenTopics    String   @map("forbidden_topics") // JSON string array
+  forbiddenTopics    String   @map("forbidden_topics")
   systemPrompt       String   @map("system_prompt")
   isBuiltIn          Boolean  @default(false) @map("is_built_in")
   createdAt          DateTime @default(now()) @map("created_at")
   updatedAt          DateTime @updatedAt @map("updated_at")
 
-  sessions Session[]
-
   @@map("agents")
 }
 
 model Session {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   title     String?
-  mode      String // single | multi | build
-  agentIds  String   @map("agent_ids") // JSON string array
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  intent    String?
+  mood      String?
+  notes     String?
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
 
   messages Message[]
-  agents   Agent[]
 
   @@map("sessions")
 }
 
 model Message {
   id        String   @id @default(cuid())
-  role      String // user | agent | system | builder
+  role      String
   content   String
-  agentId   String?  @map("agent_id")
   sessionId String   @map("session_id")
   createdAt DateTime @default(now()) @map("created_at")
 
   session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@map("messages")
+}
+
+model MemoryNote {
+  id          String   @id @default(cuid())
+  type        String
+  content     String
+  confidence  Float    @default(0.5)
+  active      Boolean  @default(true)
+  sourceIds   String
+  linkedTo    String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("memory_notes")
+}
+
+model UserContext {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  aiProfile     String   @map("ai_profile")
+  keyTopics     String   @map("key_topics")
+  sensitivities String?  @map("sensitivities")
+  stylePrefs    String?  @map("style_prefs")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@map("user_contexts")
 }

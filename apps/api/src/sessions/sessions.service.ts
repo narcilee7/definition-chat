@@ -9,40 +9,31 @@ export class SessionsService {
   async create(dto: CreateSessionDto) {
     const session = await this.prisma.session.create({
       data: {
-        mode: dto.mode,
-        agentIds: JSON.stringify(dto.agentIds),
-        title: dto.title || this.generateTitle(dto.mode),
+        title: dto.title || this.generateTitle(),
+        intent: dto.intent,
+        mood: dto.mood,
       },
     });
-    return this.serializeSession(session);
+    return session;
   }
 
   async findAll() {
-    const sessions = await this.prisma.session.findMany({
+    return this.prisma.session.findMany({
       orderBy: { updatedAt: 'desc' },
     });
-    return sessions.map((s) => this.serializeSession(s));
   }
 
   async findOne(id: string) {
-    const session = await this.prisma.session.findUnique({
+    return this.prisma.session.findUnique({
       where: { id },
       include: { messages: { orderBy: { createdAt: 'asc' } } },
     });
-    if (!session) return null;
-    return this.serializeSession(session);
   }
 
-  async addMessage(sessionId: string, role: string, content: string, agentId?: string) {
+  async addMessage(sessionId: string, role: string, content: string) {
     const message = await this.prisma.message.create({
-      data: {
-        sessionId,
-        role,
-        content,
-        agentId,
-      },
+      data: { sessionId, role, content },
     });
-    // Update session updatedAt
     await this.prisma.session.update({
       where: { id: sessionId },
       data: { updatedAt: new Date() },
@@ -50,27 +41,16 @@ export class SessionsService {
     return message;
   }
 
-  private generateTitle(mode: string): string {
+  async updateNotes(sessionId: string, notes: string) {
+    return this.prisma.session.update({
+      where: { id: sessionId },
+      data: { notes },
+    });
+  }
+
+  private generateTitle(): string {
     const now = new Date();
     const time = now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
-    if (mode === 'single') return `单Agent对话 ${time}`;
-    if (mode === 'multi') return `多Agent对话 ${time}`;
-    if (mode === 'build') return `Agent构建 ${time}`;
-    return `新对话 ${time}`;
-  }
-
-  private serializeSession(session: any) {
-    return {
-      ...session,
-      agentIds: this.safeJsonParse(session.agentIds, []),
-    };
-  }
-
-  private safeJsonParse(str: string, fallback: unknown) {
-    try {
-      return JSON.parse(str);
-    } catch {
-      return fallback;
-    }
+    return `探索 ${time}`;
   }
 }

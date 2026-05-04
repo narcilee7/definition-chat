@@ -5,20 +5,18 @@ import { api } from "@/lib/api";
 
 export interface ChatMessage {
   id: string;
-  role: "user" | "agent" | "builder";
+  role: "user" | "assistant";
   content: string;
-  agentId?: string;
   isStreaming?: boolean;
   createdAt?: string;
 }
 
 interface UseStreamChatOptions {
   sessionId: string;
-  agentId?: string;
   onError?: (error: string) => void;
 }
 
-export function useStreamChat({ sessionId, agentId, onError }: UseStreamChatOptions) {
+export function useStreamChat({ sessionId, onError }: UseStreamChatOptions) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
@@ -45,9 +43,8 @@ export function useStreamChat({ sessionId, agentId, onError }: UseStreamChatOpti
         ...prev,
         {
           id: agentMsgId,
-          role: "agent",
+          role: "assistant",
           content: "",
-          agentId,
           isStreaming: true,
         },
       ]);
@@ -58,7 +55,6 @@ export function useStreamChat({ sessionId, agentId, onError }: UseStreamChatOpti
 
         const res = await api.chat.stream({
           sessionId,
-          agentId: agentId!,
           content: content.trim(),
         });
 
@@ -133,54 +129,6 @@ export function useStreamChat({ sessionId, agentId, onError }: UseStreamChatOpti
         abortRef.current = null;
       }
     },
-    [sessionId, agentId, isLoading, onError]
-  );
-
-  const sendMultiMessage = useCallback(
-    async (content: string, agentIds: string[]) => {
-      if (!content.trim() || isLoading) return;
-
-      const userMsg: ChatMessage = {
-        id: `user-${Date.now()}`,
-        role: "user",
-        content: content.trim(),
-        createdAt: new Date().toISOString(),
-      };
-      setMessages((prev) => [...prev, userMsg]);
-      setIsLoading(true);
-
-      try {
-        const res = await api.chat.multi({
-          sessionId,
-          agentIds,
-          content: content.trim(),
-        });
-
-        const newMessages: ChatMessage[] = (res.messages || []).map((m: any) => ({
-          id: m.id || `agent-${Date.now()}-${Math.random()}`,
-          role: "agent" as const,
-          content: m.content,
-          agentId: m.agentId,
-          createdAt: m.createdAt || new Date().toISOString(),
-        }));
-
-        setMessages((prev) => [...prev, ...newMessages]);
-      } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : "发送失败";
-        onError?.(errorMsg);
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: `err-${Date.now()}`,
-            role: "agent",
-            content: `❌ ${errorMsg}`,
-            createdAt: new Date().toISOString(),
-          },
-        ]);
-      } finally {
-        setIsLoading(false);
-      }
-    },
     [sessionId, isLoading, onError]
   );
 
@@ -195,5 +143,5 @@ export function useStreamChat({ sessionId, agentId, onError }: UseStreamChatOpti
     );
   }, []);
 
-  return { messages, setMessages, sendMessage, sendMultiMessage, isLoading, stop, initMessages };
+  return { messages, sendMessage, isLoading, stop, initMessages };
 }
