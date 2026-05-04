@@ -3,8 +3,18 @@
 // ============================================================
 
 export interface ChatMessage {
-  role: 'system' | 'user' | 'assistant';
-  content: string;
+  role: 'system' | 'user' | 'assistant' | 'tool';
+  content: string | null;
+  name?: string;
+  tool_call_id?: string;
+  tool_calls?: Array<{
+    id: string;
+    type: string;
+    function: {
+      name: string;
+      arguments: string;
+    };
+  }>;
 }
 
 export interface ChatOptions {
@@ -21,7 +31,11 @@ export interface StreamChunk {
 
 export interface LLMProvider {
   readonly name: string;
-  chat(messages: ChatMessage[], options?: ChatOptions): Promise<string>;
+  chat(
+    messages: ChatMessage[],
+    options?: ChatOptions,
+    tools?: Array<{ name: string; description: string; parameters: unknown }>,
+  ): Promise<{ content: string; toolCalls?: Array<{ id: string; name: string; arguments: string }> }>;
   stream?(messages: ChatMessage[], options?: ChatOptions): AsyncIterable<StreamChunk>;
 }
 

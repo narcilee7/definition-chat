@@ -15,7 +15,13 @@ export interface AgentEvent {
     | 'memory:read'
     | 'memory:write'
     | 'registry:register'
-    | 'registry:remove';
+    | 'registry:remove'
+    | 'tool:call'
+    | 'tool:success'
+    | 'tool:error'
+    | 'agent:init'
+    | 'agent:error'
+    | 'agent:destroy';
   agentId?: string;
   agentName?: string;
   provider?: string;

@@ -34,3 +34,23 @@ export { CircuitBreaker } from './retry/circuit-breaker';
 // Observability
 export { EventBus, globalEventBus } from './observability/event-bus';
 export { MetricsCollector } from './observability/metrics';
+
+// Tools
+export { ToolRegistry, globalToolRegistry } from './tools/registry';
+export { ToolExecutor } from './tools/executor';
+export { builtInTools, currentTimeTool, calculatorTool, searchMemoryTool, webSearchTool } from './tools/built-in';
+export type { Tool, ToolCall, ToolResult, ToolParameterSchema, JSONSchemaProperty } from './tools/types';
+
+// Structured Output
+export { generateJSON, extractStructured } from './structured-output';
+export type { JSONSchema } from './structured-output';
+
+// Vector Memory
+export { VectorMemoryStore, simpleEmbed, cosineSimilarity } from './vector-memory';
+export type { EmbeddedDocument } from './vector-memory';
+
+// State Machine
+export { AgentStateMachine } from './state/state-machine';
+export { AgentLifecycle } from './state/lifecycle';
+export type { AgentState, StateTransition } from './state/state-machine';
+export type { LifecycleHooks } from './state/lifecycle';

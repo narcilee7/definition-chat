@@ -1,10 +1,19 @@
 import { LLMProvider, ChatMessage, ChatOptions, ProviderConfig, StreamChunk } from '../types';
 import { parseSSEStream } from '../streaming';
+import { Tool } from '../tools/types';
 
 interface OpenAIFormatResponse {
   choices?: Array<{
     message?: {
       content?: string;
+      tool_calls?: Array<{
+        id: string;
+        type: string;
+        function: {
+          name: string;
+          arguments: string;
+        };
+      }>;
     };
   }>;
   error?: {
@@ -20,25 +29,43 @@ export abstract class BaseProvider implements LLMProvider {
     this.config = config;
   }
 
-  async chat(messages: ChatMessage[], options?: ChatOptions): Promise<string> {
+  async chat(
+    messages: ChatMessage[],
+    options?: ChatOptions,
+    tools?: Tool[],
+  ): Promise<{ content: string; toolCalls?: Array<{ id: string; name: string; arguments: string }> }> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), options?.timeoutMs ?? 15000);
 
     try {
+      const body: Record<string, unknown> = {
+        model: this.config.model,
+        messages,
+        temperature: options?.temperature ?? 0.7,
+        max_tokens: options?.maxTokens ?? 512,
+        top_p: options?.topP ?? 0.9,
+        stream: false,
+      };
+
+      if (tools && tools.length > 0) {
+        body.tools = tools.map((t) => ({
+          type: 'function',
+          function: {
+            name: t.name,
+            description: t.description,
+            parameters: t.parameters,
+          },
+        }));
+        body.tool_choice = 'auto';
+      }
+
       const res = await fetch(`${this.config.baseUrl}/chat/completions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${this.config.apiKey}`,
         },
-        body: JSON.stringify({
-          model: this.config.model,
-          messages,
-          temperature: options?.temperature ?? 0.7,
-          max_tokens: options?.maxTokens ?? 512,
-          top_p: options?.topP ?? 0.9,
-          stream: false,
-        }),
+        body: JSON.stringify(body),
         signal: controller.signal,
       });
 
@@ -50,11 +77,15 @@ export abstract class BaseProvider implements LLMProvider {
       }
 
       const data = (await res.json()) as OpenAIFormatResponse;
-      const content = data.choices?.[0]?.message?.content?.trim();
-      if (!content) {
-        throw new Error(`${this.name} returned empty content`);
-      }
-      return content;
+      const message = data.choices?.[0]?.message;
+      const content = message?.content?.trim() || '';
+      const toolCalls = message?.tool_calls?.map((tc) => ({
+        id: tc.id,
+        name: tc.function.name,
+        arguments: tc.function.arguments,
+      }));
+
+      return { content, toolCalls };
     } catch (err) {
       clearTimeout(timeout);
       if (err instanceof Error && err.name === 'AbortError') {

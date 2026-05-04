@@ -4,22 +4,58 @@ import { MemoryFactory } from './memory/factory';
 import { withRetry } from './retry/retry';
 import { CircuitBreaker } from './retry/circuit-breaker';
 import { globalEventBus } from './observability/event-bus';
+import { ToolRegistry } from './tools/registry';
+import { ToolExecutor } from './tools/executor';
+import { Tool } from './tools/types';
+import { AgentStateMachine } from './state/state-machine';
+import { AgentLifecycle } from './state/lifecycle';
 
 export class Agent {
   readonly persona: AgentPersona;
   private memory: Memory;
   private provider: ReturnType<typeof LLMProviderFactory.create>;
   private circuitBreaker: CircuitBreaker;
+  private toolRegistry: ToolRegistry;
+  private toolExecutor: ToolExecutor;
+  private _stateMachine: AgentStateMachine;
+  private _lifecycle: AgentLifecycle;
+  private maxToolRounds = 3;
 
-  constructor(persona: AgentPersona) {
+  constructor(persona: AgentPersona, tools?: Tool[]) {
     this.persona = persona;
     this.provider = LLMProviderFactory.create(persona.provider);
     this.memory = MemoryFactory.create(persona.memory ?? { type: 'buffer', maxMessages: 20 });
     this.circuitBreaker = new CircuitBreaker();
+    this.toolRegistry = new ToolRegistry();
+    this.toolExecutor = new ToolExecutor(this.toolRegistry);
+    this._stateMachine = new AgentStateMachine();
+    this._lifecycle = new AgentLifecycle();
+
+    if (tools) {
+      this.toolRegistry.registerMany(tools);
+    }
+  }
+
+  get stateMachine(): AgentStateMachine {
+    return this._stateMachine;
+  }
+
+  get lifecycle(): AgentLifecycle {
+    return this._lifecycle;
+  }
+
+  addTool(tool: Tool): void {
+    this.toolRegistry.register(tool);
+  }
+
+  addTools(tools: Tool[]): void {
+    this.toolRegistry.registerMany(tools);
   }
 
   async chat(userMessage: string, history?: ChatMessage[]): Promise<AgentResponse> {
     const start = Date.now();
+    this._stateMachine.transition('thinking', 'chat');
+    await this._lifecycle.beforeChat(userMessage);
 
     globalEventBus.emitQuick('chat:start', {
       agentId: this.persona.id,
@@ -28,41 +64,85 @@ export class Agent {
 
     try {
       const messages = await this.buildMessages(userMessage, history);
+      const tools = this.toolRegistry.list();
 
-      const content = await this.circuitBreaker.execute(() =>
-        withRetry(
-          () =>
-            this.provider.chat(messages, {
+      let finalContent = '';
+      let toolRound = 0;
+
+      // Tool calling loop (max 3 rounds)
+      while (toolRound < this.maxToolRounds) {
+        const { content, toolCalls } = await this.circuitBreaker.execute(() =>
+          withRetry(
+            () => this.provider.chat(messages, {
               temperature: this.persona.temperature ?? 0.7,
               maxTokens: this.persona.maxTokens ?? 512,
               timeoutMs: 15000,
-            }),
-          { maxRetries: 2 },
-        ),
-      );
+            }, tools.length > 0 ? tools : undefined),
+            { maxRetries: 2 },
+          ),
+        );
 
-      await this.saveToMemory(userMessage, content);
+        if (!toolCalls || toolCalls.length === 0) {
+          finalContent = content;
+          break;
+        }
 
+        // Execute tools
+        this._stateMachine.transition('calling_tool', 'tool_call');
+        const parsedCalls = toolCalls.map((tc) => ({
+          id: tc.id,
+          name: tc.name,
+          arguments: JSON.parse(tc.arguments) as Record<string, unknown>,
+        }));
+
+        const results = await this.toolExecutor.execute(parsedCalls);
+
+        // Add tool results to messages for next LLM call
+        messages.push({
+          role: 'assistant',
+          content: content || null,
+          tool_calls: toolCalls.map((tc) => ({
+            id: tc.id,
+            type: 'function',
+            function: { name: tc.name, arguments: tc.arguments },
+          })),
+        } as ChatMessage);
+
+        for (const result of results) {
+          messages.push({
+            role: 'tool',
+            content: result.error || result.result,
+            tool_call_id: result.toolCallId,
+          } as ChatMessage);
+        }
+
+        toolRound++;
+      }
+
+      await this.saveToMemory(userMessage, finalContent);
       const latencyMs = Date.now() - start;
+
+      this._stateMachine.transition('idle', 'chat_complete');
+      await this._lifecycle.afterChat(userMessage, finalContent);
 
       globalEventBus.emitQuick('chat:end', {
         agentId: this.persona.id,
         agentName: this.persona.name,
         latencyMs,
       });
-
-      globalEventBus.emitQuick('provider:success', {
-        provider: this.provider.name,
-      });
+      globalEventBus.emitQuick('provider:success', { provider: this.provider.name });
 
       return {
-        content,
+        content: finalContent,
         agentId: this.persona.id,
         agentName: this.persona.name,
         latencyMs,
       };
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
+      this._stateMachine.transition('error', 'chat_error');
+      await this._lifecycle.onError(err instanceof Error ? err : new Error(error));
+
       globalEventBus.emitQuick('chat:error', {
         agentId: this.persona.id,
         agentName: this.persona.name,
@@ -80,6 +160,7 @@ export class Agent {
     userMessage: string,
     history?: ChatMessage[],
   ): AsyncGenerator<StreamChunk> {
+    this._stateMachine.transition('streaming', 'stream');
     globalEventBus.emitQuick('chat:start', {
       agentId: this.persona.id,
       agentName: this.persona.name,
@@ -108,6 +189,7 @@ export class Agent {
       }
 
       await this.saveToMemory(userMessage, fullContent);
+      this._stateMachine.transition('idle', 'stream_complete');
 
       globalEventBus.emitQuick('chat:end', {
         agentId: this.persona.id,
@@ -115,6 +197,8 @@ export class Agent {
       });
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
+      this._stateMachine.transition('error', 'stream_error');
+      await this._lifecycle.onError(err instanceof Error ? err : new Error(error));
       globalEventBus.emitQuick('chat:error', {
         agentId: this.persona.id,
         agentName: this.persona.name,
@@ -126,6 +210,7 @@ export class Agent {
 
   async chatWithContext(contextMessages: ChatMessage[], userMessage: string): Promise<AgentResponse> {
     const start = Date.now();
+    this._stateMachine.transition('thinking', 'chat_context');
 
     globalEventBus.emitQuick('chat:start', {
       agentId: this.persona.id,
@@ -139,19 +224,19 @@ export class Agent {
         { role: 'user', content: userMessage },
       ];
 
-      const content = await this.circuitBreaker.execute(() =>
+      const { content } = await this.circuitBreaker.execute(() =>
         withRetry(
-          () =>
-            this.provider.chat(messages, {
-              temperature: this.persona.temperature ?? 0.7,
-              maxTokens: this.persona.maxTokens ?? 512,
-              timeoutMs: 15000,
-            }),
+          () => this.provider.chat(messages, {
+            temperature: this.persona.temperature ?? 0.7,
+            maxTokens: this.persona.maxTokens ?? 512,
+            timeoutMs: 15000,
+          }),
           { maxRetries: 2 },
         ),
       );
 
       const latencyMs = Date.now() - start;
+      this._stateMachine.transition('idle', 'chat_context_complete');
 
       globalEventBus.emitQuick('chat:end', {
         agentId: this.persona.id,
@@ -167,6 +252,8 @@ export class Agent {
       };
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
+      this._stateMachine.transition('error', 'chat_context_error');
+      await this._lifecycle.onError(err instanceof Error ? err : new Error(error));
       globalEventBus.emitQuick('chat:error', {
         agentId: this.persona.id,
         agentName: this.persona.name,
