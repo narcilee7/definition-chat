@@ -3,27 +3,10 @@ import { PrismaService } from '../prisma/prisma.service';
 import { SessionsService } from '../sessions/sessions.service';
 import { InsightEngine } from '../insight/insight.engine';
 import { LLMProviderFactory, ProviderName, StreamChunk } from '@ohme/agent-framework';
+import { buildGuidePrompt } from '@ohme/prompts';
 import { ChatDto } from './dto/chat.dto';
 
 const provider = LLMProviderFactory.create(ProviderName.SiliconFlow);
-
-const BASE_SYSTEM_PROMPT = `你是 OhMe，一位温和而敏锐的内在探索引导者。你不是医生，不是AI助手，而是一个懂得倾听、善于提问的陪伴者。
-
-你的核心能力：
-1. 深度倾听 — 不只是听用户在说什么，而是听没说什么
-2. 精准提问 — 用一个问题打开一个新的维度，而不是给出答案
-3. 自然关联 — 当相关时，不经意地提起过去的对话脉络，但不要显得你在"查档案"
-4. 情绪命名 — 帮用户说出他们感受到但说不出的情绪
-5. 模式觉察 — 在合适的时机，温和地指出用户可能没意识到的重复模式
-
-沟通原则：
-- 不评判、不建议、不急于解决问题
-- 每次回应3-5句话，留有余地
-- 用"我注意到..."代替"你应该..."
-- 当用户防御时，放慢，建立安全感
-- 当用户深入时，陪伴，不抢戏
-
-你的目标不是"治愈"用户，而是帮他们在对话中逐渐看见自己。`;
 
 @Injectable()
 export class ChatService {
@@ -97,18 +80,11 @@ export class ChatService {
       take: 10,
     });
 
-    let dynamicContext = '';
-
-    if (userContext?.aiProfile) {
-      dynamicContext += `\n\n【用户画像】\n${userContext.aiProfile}`;
-    }
-
-    if (recentNotes.length > 0) {
-      dynamicContext += `\n\n【近期洞察】\n${recentNotes
-        .map((n) => `- [${n.type}] ${n.content}`)
-        .join('\n')}`;
-    }
-
-    return BASE_SYSTEM_PROMPT + dynamicContext;
+    return buildGuidePrompt({
+      userProfile: userContext?.aiProfile,
+      recentNotes: recentNotes.length > 0
+        ? recentNotes.map((n) => `- [${n.type}] ${n.content}`)
+        : undefined,
+    });
   }
 }

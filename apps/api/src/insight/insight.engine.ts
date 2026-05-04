@@ -1,6 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { LLMProviderFactory, ProviderName } from '@ohme/agent-framework';
+import {
+  sessionNotesPrompt,
+  MEMORY_EXTRACTION_SYSTEM,
+  memoryExtractionPrompt,
+  PROFILE_UPDATE_SYSTEM,
+  profileUpdatePrompt,
+} from '@ohme/prompts';
 
 const provider = LLMProviderFactory.create(ProviderName.SiliconFlow);
 
@@ -58,11 +65,7 @@ export class InsightEngine {
   private async generateSessionNotes(transcript: string): Promise<string> {
     const res = await provider.chat(
       [
-        {
-          role: 'system',
-          content:
-            '你是一位资深心理咨询师。请根据以下对话记录，用3-5句话写一段 session 摘要。捕捉核心情绪、关键发现、用户展现的模式。语言要温暖、专业、准确。',
-        },
+        { role: 'system', content: sessionNotesPrompt(transcript) },
         { role: 'user', content: transcript },
       ],
       { temperature: 0.5, maxTokens: 512 },
@@ -71,39 +74,10 @@ export class InsightEngine {
   }
 
   private async extractMemoryNotes(transcript: string): Promise<ExtractedNotes> {
-    const schemaDescription = JSON.stringify({
-      type: 'object',
-      properties: {
-        notes: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              type: { type: 'string' },
-              content: { type: 'string' },
-              confidence: { type: 'number' },
-            },
-            required: ['type', 'content', 'confidence'],
-          },
-        },
-      },
-      required: ['notes'],
-    }, null, 2);
-
     const res = await provider.chat(
       [
-        {
-          role: 'system',
-          content: `从对话中提取值得长期记忆的洞察。只输出纯 JSON，严格遵守以下 JSON Schema：
-
-${schemaDescription}
-
-要求：
-- 只输出纯 JSON，不要有任何 markdown 代码块标记
-- 每个 note 的 type 是自由标签（如 emotion, belief, pattern, event, relationship, value, fear, desire 等）
-- 只提取高置信度、有持久价值的洞察，不要提取琐碎信息`,
-        },
-        { role: 'user', content: transcript },
+        { role: 'system', content: MEMORY_EXTRACTION_SYSTEM },
+        { role: 'user', content: memoryExtractionPrompt(transcript) },
       ],
       { temperature: 0.3, maxTokens: 1024 },
     );
@@ -125,18 +99,16 @@ ${schemaDescription}
       where: { userId: 'default' },
     });
 
-    const contextPrompt = existing
-      ? `当前用户画像：\n${existing.aiProfile}\n\n最近会话摘要：\n${notes}\n\n请基于以上信息和新对话，更新用户画像。保持简洁（200字以内），捕捉核心特征。`
-      : `请根据以下对话记录，写一段简洁的用户画像（200字以内），捕捉这个人的核心特征、情绪模式、关注议题。\n\n对话记录：\n${transcript}`;
+    const prompt = profileUpdatePrompt({
+      existingProfile: existing?.aiProfile,
+      recentNotes: notes,
+      transcript: existing ? undefined : transcript,
+    });
 
     const res = await provider.chat(
       [
-        {
-          role: 'system',
-          content:
-            '你是一位心理咨询师。你的任务是为用户维护一份"心理画像"——一段自然语言描述，概括这个人的核心特征、情绪模式、关注议题和沟通偏好。画像应该简洁、准确、温暖。',
-        },
-        { role: 'user', content: contextPrompt },
+        { role: 'system', content: PROFILE_UPDATE_SYSTEM },
+        { role: 'user', content: prompt },
       ],
       { temperature: 0.5, maxTokens: 512 },
     );
