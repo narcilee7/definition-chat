@@ -1,22 +1,25 @@
 import { Controller, Get, Post, Body, Param } from '@nestjs/common';
 import { SessionsService } from './sessions.service';
+import { CreateSessionDto } from './dto/create-session.dto';
 
 @Controller('sessions')
 export class SessionsController {
   constructor(private readonly sessionsService: SessionsService) {}
 
   @Post()
-  create(@Body() body: { mode: string; agentIds: string[]; title?: string }) {
-    return this.sessionsService.create(body);
+  async create(@Body() dto: CreateSessionDto) {
+    return this.sessionsService.create(dto);
   }
 
   @Get()
-  findAll() {
+  async findAll() {
     return this.sessionsService.findAll();
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.sessionsService.findOne(id);
+  async findOne(@Param('id') id: string) {
+    const session = await this.sessionsService.findOne(id);
+    if (!session) return { error: 'Session not found' };
+    return session;
   }
 }

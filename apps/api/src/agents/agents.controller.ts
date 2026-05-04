@@ -1,27 +1,30 @@
 import { Controller, Get, Post, Body, Param, Delete } from '@nestjs/common';
 import { AgentsService } from './agents.service';
+import { CreateAgentDto } from './dto/create-agent.dto';
 
 @Controller('agents')
 export class AgentsController {
   constructor(private readonly agentsService: AgentsService) {}
 
   @Get()
-  findAll() {
+  async findAll() {
     return this.agentsService.findAll();
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.agentsService.findOne(id);
+  async findOne(@Param('id') id: string) {
+    const agent = await this.agentsService.findOne(id);
+    if (!agent) return { error: 'Agent not found' };
+    return agent;
   }
 
   @Post()
-  create(@Body() data: unknown) {
-    return this.agentsService.create(data);
+  async create(@Body() dto: CreateAgentDto) {
+    return this.agentsService.create(dto);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
+  async remove(@Param('id') id: string) {
     return this.agentsService.remove(id);
   }
 }
