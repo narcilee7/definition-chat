@@ -50,6 +50,9 @@ importers:
       '@ohme/agent-framework':
         specifier: workspace:*
         version: link:../../packages/agent-framework
+      '@ohme/prompts':
+        specifier: workspace:*
+        version: link:../../packages/prompts
       '@ohme/types':
         specifier: workspace:*
         version: link:../../packages/types
