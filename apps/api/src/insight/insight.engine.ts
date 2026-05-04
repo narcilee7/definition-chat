@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { createLogger } from '@ohme/observability';
 import { PrismaService } from '../prisma/prisma.service';
-import { LLMProviderFactory, ProviderName } from '@ohme/agent-framework';
 import {
   sessionNotesPrompt,
   MEMORY_EXTRACTION_SYSTEM,
@@ -9,8 +8,7 @@ import {
   PROFILE_UPDATE_SYSTEM,
   profileUpdatePrompt,
 } from '@ohme/prompts';
-
-const provider = LLMProviderFactory.create(ProviderName.SiliconFlow);
+import { LLMFallbackService } from '../llm/llm-fallback.service';
 
 interface ExtractedNotes {
   notes: Array<{
@@ -24,7 +22,10 @@ interface ExtractedNotes {
 export class InsightEngine {
   private readonly logger = createLogger('InsightEngine');
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private llm: LLMFallbackService,
+  ) {}
 
   async processSession(sessionId: string) {
     const session = await this.prisma.session.findUnique({
@@ -70,7 +71,7 @@ export class InsightEngine {
   }
 
   private async generateSessionNotes(transcript: string): Promise<string> {
-    const res = await provider.chat(
+    const res = await this.llm.chat(
       [
         { role: 'system', content: sessionNotesPrompt(transcript) },
         { role: 'user', content: transcript },
@@ -81,7 +82,7 @@ export class InsightEngine {
   }
 
   private async extractMemoryNotes(transcript: string): Promise<ExtractedNotes> {
-    const res = await provider.chat(
+    const res = await this.llm.chat(
       [
         { role: 'system', content: MEMORY_EXTRACTION_SYSTEM },
         { role: 'user', content: memoryExtractionPrompt(transcript) },
@@ -112,7 +113,7 @@ export class InsightEngine {
       transcript: existing ? undefined : transcript,
     });
 
-    const res = await provider.chat(
+    const res = await this.llm.chat(
       [
         { role: 'system', content: PROFILE_UPDATE_SYSTEM },
         { role: 'user', content: prompt },

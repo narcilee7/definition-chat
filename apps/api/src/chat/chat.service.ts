@@ -3,11 +3,10 @@ import { createLogger } from '@ohme/observability';
 import { PrismaService } from '../prisma/prisma.service';
 import { SessionsService } from '../sessions/sessions.service';
 import { InsightEngine } from '../insight/insight.engine';
-import { LLMProviderFactory, ProviderName, StreamChunk } from '@ohme/agent-framework';
+import { StreamChunk } from '@ohme/agent-framework';
 import { buildGuidePrompt } from '@ohme/prompts';
 import { ChatDto } from './dto/chat.dto';
-
-const provider = LLMProviderFactory.create(ProviderName.SiliconFlow);
+import { LLMFallbackService } from '../llm/llm-fallback.service';
 
 @Injectable()
 export class ChatService {
@@ -17,6 +16,7 @@ export class ChatService {
     private prisma: PrismaService,
     private sessions: SessionsService,
     private insight: InsightEngine,
+    private llm: LLMFallbackService,
   ) {}
 
   async *streamChat(dto: ChatDto): AsyncGenerator<StreamChunk> {
@@ -35,7 +35,7 @@ export class ChatService {
     ];
 
     let fullContent = '';
-    for await (const chunk of provider.stream!(messages, { temperature: 0.7, maxTokens: 1024 })) {
+    for await (const chunk of this.llm.stream(messages, { temperature: 0.7, maxTokens: 1024 })) {
       fullContent += chunk.content;
       yield chunk;
     }
@@ -65,7 +65,7 @@ export class ChatService {
       { role: 'user' as const, content: dto.content },
     ];
 
-    const res = await provider.chat(messages, { temperature: 0.7, maxTokens: 1024 });
+    const res = await this.llm.chat(messages, { temperature: 0.7, maxTokens: 1024 });
     const message = await this.sessions.addMessage(dto.sessionId, 'assistant', res.content);
 
     setImmediate(() => {

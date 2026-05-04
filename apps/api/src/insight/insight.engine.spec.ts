@@ -1,6 +1,14 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { InsightEngine } from './insight.engine';
 import { PrismaService } from '../prisma/prisma.service';
+import { LLMFallbackService } from '../llm/llm-fallback.service';
+
+function createMockLLM(): LLMFallbackService {
+  return {
+    chat: async () => ({ content: 'mock notes' }),
+    stream: async function* () {},
+  } as unknown as LLMFallbackService;
+}
 
 function createMockPrisma() {
   const sessions: any[] = [];
@@ -52,7 +60,7 @@ describe('InsightEngine', () => {
 
   beforeEach(() => {
     prisma = createMockPrisma();
-    engine = new InsightEngine(prisma);
+    engine = new InsightEngine(prisma, createMockLLM());
   });
 
   it('should not process session with fewer than 2 messages', async () => {
