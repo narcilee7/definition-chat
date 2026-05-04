@@ -1,8 +1,8 @@
-import { Agent } from '../core/agent';
-import { AgentResponse } from '../core/types';
+import { Agent } from '../agent';
+import { AgentResponse } from '../types';
 
 /**
- * DebateOrchestrator — 两个 Agent 辩论
+ * 两个 Agent 辩论
  * 双方就同一话题轮流发言
  */
 export async function debateExecute(
@@ -15,7 +15,6 @@ export async function debateExecute(
   let lastContent = topic;
 
   for (let i = 0; i < rounds; i++) {
-    // Agent A responds
     try {
       const resA = await agentA.chat(
         i === 0 ? topic : `对方说："${lastContent}"，请回应`
@@ -32,7 +31,6 @@ export async function debateExecute(
       });
     }
 
-    // Agent B responds
     try {
       const resB = await agentB.chat(`对方说："${lastContent}"，请回应`);
       results.push(resB);

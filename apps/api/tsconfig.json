@@ -4,7 +4,8 @@
     "baseUrl": "./",
     "strictPropertyInitialization": false,
     "paths": {
-      "@ohme/types": ["../../packages/types/src"]
+      "@ohme/types": ["../../packages/types/src"],
+      "@ohme/agent-framework": ["../../packages/agent-framework/dist"]
     }
   },
   "include": ["src/**/*"],

@@ -1,4 +1,4 @@
-import { Memory, MemoryMessage } from '../core/types';
+import { Memory, MemoryMessage } from '../types';
 
 /**
  * WindowMemory — 基于近似 token 数的滑动窗口
@@ -33,12 +33,10 @@ export class WindowMemory implements Memory {
   }
 
   private trim(): void {
-    // First trim by message count
     if (this.messages.length > this.maxMessages) {
       this.messages = this.messages.slice(-this.maxMessages);
     }
 
-    // Then trim by approximate token count (1 token ≈ 4 chars for CJK, 1 char for EN)
     let totalTokens = 0;
     for (const m of this.messages) {
       totalTokens += this.estimateTokens(m.content);
@@ -51,7 +49,6 @@ export class WindowMemory implements Memory {
   }
 
   private estimateTokens(text: string): number {
-    // Rough estimate: CJK chars ≈ 1.5 tokens each, ASCII ≈ 0.3 tokens each
     let tokens = 0;
     for (const char of text) {
       tokens = char.charCodeAt(0) > 127 ? tokens + 1.5 : tokens + 0.3;

@@ -1,11 +1,4 @@
-import { LLMProvider, ChatMessage, ChatOptions } from '../core/types';
-
-export interface ProviderConfig {
-  apiKey: string;
-  baseUrl: string;
-  model: string;
-  name: string;
-}
+import { LLMProvider, ChatMessage, ChatOptions, ProviderConfig } from '../types';
 
 interface OpenAIFormatResponse {
   choices?: Array<{

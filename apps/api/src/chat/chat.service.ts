@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { globalRegistry, parallelExecute, Agent } from '../agent-framework';
+import { globalRegistry, parallelExecute, Agent } from '@ohme/agent-framework';
 import { SessionsService } from '../sessions/sessions.service';
 import { ChatDto, MultiChatDto } from './dto/chat.dto';
 

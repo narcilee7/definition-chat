@@ -1,7 +1,7 @@
-import { Memory, MemoryConfig } from '../core/types';
-import { BufferMemory } from './buffer.memory';
-import { WindowMemory } from './window.memory';
-import { SQLiteMemory } from './sqlite.memory';
+import { Memory, MemoryConfig } from '../types';
+import { BufferMemory } from './buffer';
+import { WindowMemory } from './window';
+import { SQLiteMemory } from './sqlite';
 
 export class MemoryFactory {
   static create(config: MemoryConfig): Memory {

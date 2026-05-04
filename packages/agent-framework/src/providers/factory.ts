@@ -1,15 +1,17 @@
-import { LLMProvider } from '../core/types';
-import { SiliconFlowProvider } from './siliconflow.provider';
-import { DeepSeekProvider } from './deepseek.provider';
-import { GroqProvider } from './groq.provider';
-import { OpenRouterProvider } from './openrouter.provider';
-import { OpenAICompatibleProvider } from './openai-compatible.provider';
+import { LLMProvider, ProviderName } from '../types';
+import { getConfig } from '../config';
+import { SiliconFlowProvider } from './siliconflow';
+import { DeepSeekProvider } from './deepseek';
+import { GroqProvider } from './groq';
+import { OpenRouterProvider } from './openrouter';
+import { OpenAICompatibleProvider } from './openai-compatible';
 
 export class LLMProviderFactory {
   static create(providerName?: string): LLMProvider {
-    const name = providerName || process.env.DEFAULT_LLM_PROVIDER || 'siliconflow';
+    const config = getConfig();
+    const name = (providerName || config.defaultProvider) as ProviderName;
 
-    switch (name.toLowerCase()) {
+    switch (name) {
       case 'siliconflow':
         return new SiliconFlowProvider();
       case 'deepseek':
@@ -18,16 +20,14 @@ export class LLMProviderFactory {
         return new GroqProvider();
       case 'openrouter':
         return new OpenRouterProvider();
-      case 'generic':
       case 'openai-compatible':
         return new OpenAICompatibleProvider();
       default:
-        // Try generic compatible
         return new OpenAICompatibleProvider({ name });
     }
   }
 
-  static list(): string[] {
+  static list(): ProviderName[] {
     return ['siliconflow', 'deepseek', 'groq', 'openrouter', 'openai-compatible'];
   }
 }

@@ -1,0 +1,25 @@
+{
+  "name": "@ohme/agent-framework",
+  "version": "0.1.0",
+  "private": true,
+  "description": "OhMe Agent Framework — memory, orchestration, multi-provider LLM abstraction",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src/**/*.ts"
+  },
+  "devDependencies": {
+    "@ohme/config": "workspace:*",
+    "@types/node": "^25.6.0",
+    "typescript": "^5.4.0"
+  }
+}

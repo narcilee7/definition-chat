@@ -1,6 +1,6 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
-import { globalRegistry, AgentPersona } from './index';
+import { PrismaService } from './prisma/prisma.service';
+import { globalRegistry, AgentPersona } from '@ohme/agent-framework';
 
 @Injectable()
 export class AgentLoaderService implements OnModuleInit {
@@ -16,7 +16,7 @@ export class AgentLoaderService implements OnModuleInit {
       color: a.color,
       temperature: 0.7,
       maxTokens: 512,
-      memory: { type: 'buffer', maxMessages: 20 },
+      memory: { type: 'buffer' as const, maxMessages: 20 },
     }));
 
     globalRegistry.registerMany(personas);

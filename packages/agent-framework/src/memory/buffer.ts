@@ -1,4 +1,4 @@
-import { Memory, MemoryMessage } from '../core/types';
+import { Memory, MemoryMessage } from '../types';
 
 /**
  * BufferMemory — 内存中的环形缓冲区

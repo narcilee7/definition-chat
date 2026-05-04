@@ -1,3 +1,7 @@
+// ============================================================
+// OhMe Agent Framework — Core Types
+// ============================================================
+
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
   content: string;
@@ -29,8 +33,10 @@ export interface Memory {
   clear(): Promise<void>;
 }
 
+export type MemoryType = 'buffer' | 'window' | 'sqlite';
+
 export interface MemoryConfig {
-  type: 'buffer' | 'window' | 'sqlite';
+  type: MemoryType;
   maxMessages?: number;
   maxTokens?: number;
   sessionId?: string;
@@ -44,7 +50,7 @@ export interface AgentPersona {
   color?: string;
   temperature?: number;
   maxTokens?: number;
-  provider?: string; // provider name override
+  provider?: string;
   memory?: MemoryConfig;
 }
 
@@ -59,4 +65,18 @@ export interface MultiAgentRequest {
   personaIds: string[];
   userMessage: string;
   mode: 'parallel' | 'sequential' | 'debate';
+}
+
+export type ProviderName =
+  | 'siliconflow'
+  | 'deepseek'
+  | 'groq'
+  | 'openrouter'
+  | 'openai-compatible';
+
+export interface ProviderConfig {
+  apiKey: string;
+  baseUrl: string;
+  model: string;
+  name: string;
 }

@@ -1,16 +1,13 @@
-import { Memory, MemoryMessage, MemoryConfig } from '../core/types';
+import { Memory, MemoryMessage, MemoryConfig } from '../types';
 
 /**
- * SQLiteMemory — 持久化到 SQLite 数据库
+ * SQLiteMemory — 基于内存 Map 的持久化模拟
  * 按 sessionId 隔离，支持跨会话记忆
- * 注意：这是一个简化实现，实际使用需要 PrismaClient
  */
 export class SQLiteMemory implements Memory {
   private sessionId: string;
   private maxMessages: number;
-
-  // In-memory fallback when no Prisma available
-  private static store: Map<string, MemoryMessage[]> = new Map();
+  private static store = new Map<string, MemoryMessage[]>();
 
   constructor(config: MemoryConfig) {
     this.sessionId = config.sessionId || 'default';
@@ -18,13 +15,12 @@ export class SQLiteMemory implements Memory {
   }
 
   async add(message: MemoryMessage): Promise<void> {
-    const key = this.sessionId;
-    const existing = SQLiteMemory.store.get(key) || [];
+    const existing = SQLiteMemory.store.get(this.sessionId) || [];
     existing.push(message);
     if (existing.length > this.maxMessages) {
-      SQLiteMemory.store.set(key, existing.slice(-this.maxMessages));
+      SQLiteMemory.store.set(this.sessionId, existing.slice(-this.maxMessages));
     } else {
-      SQLiteMemory.store.set(key, existing);
+      SQLiteMemory.store.set(this.sessionId, existing);
     }
   }
 

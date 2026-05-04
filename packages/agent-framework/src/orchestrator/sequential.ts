@@ -1,8 +1,8 @@
-import { Agent } from '../core/agent';
-import { AgentResponse } from '../core/types';
+import { Agent } from '../agent';
+import { AgentResponse } from '../types';
 
 /**
- * SequentialOrchestrator — 串行执行多个 Agent
+ * 串行执行多个 Agent
  * 前一个 Agent 的输出作为后一个的输入上下文
  */
 export async function sequentialExecute(

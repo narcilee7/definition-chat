@@ -1,13 +1,9 @@
 import { AgentPersona } from './types';
 import { Agent } from './agent';
 
-/**
- * AgentRegistry — Agent 注册表
- * 管理所有可用 Agent 的创建和检索
- */
 export class AgentRegistry {
-  private personas: Map<string, AgentPersona> = new Map();
-  private instances: Map<string, Agent> = new Map();
+  private personas = new Map<string, AgentPersona>();
+  private instances = new Map<string, Agent>();
 
   register(persona: AgentPersona): void {
     this.personas.set(persona.id, persona);
@@ -24,11 +20,9 @@ export class AgentRegistry {
   }
 
   getAgent(id: string): Agent {
-    // Return cached instance if exists
     const cached = this.instances.get(id);
     if (cached) return cached;
 
-    // Create new instance
     const persona = this.personas.get(id);
     if (!persona) {
       throw new Error(`Agent persona not found: ${id}`);
@@ -61,7 +55,11 @@ export class AgentRegistry {
   clearInstances(): void {
     this.instances.clear();
   }
+
+  count(): number {
+    return this.personas.size;
+  }
 }
 
-// Singleton instance
+// Singleton
 export const globalRegistry = new AgentRegistry();

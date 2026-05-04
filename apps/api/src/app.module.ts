@@ -5,7 +5,7 @@ import { ChatModule } from './chat/chat.module';
 import { SessionsModule } from './sessions/sessions.module';
 import { BuilderModule } from './builder/builder.module';
 import { PrismaModule } from './prisma/prisma.module';
-import { AgentLoaderService } from './agent-framework/agent-loader.service';
+import { AgentLoaderService } from './agent-loader.service';
 
 @Module({
   imports: [

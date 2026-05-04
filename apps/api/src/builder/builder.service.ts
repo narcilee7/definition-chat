@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { globalRegistry } from '../agent-framework';
+import { globalRegistry } from '@ohme/agent-framework';
 import { AgentsService } from '../agents/agents.service';
 import { SessionsService } from '../sessions/sessions.service';
 import { BuilderChatDto, ConfirmAgentDto } from './dto/builder-chat.dto';
