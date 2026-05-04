@@ -1,39 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import Header from "@/components/Header";
-import { api } from "@/lib/api";
+import { useAgents } from "@/hooks/use-agents";
+import { useSessions } from "@/hooks/use-sessions";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Skeleton } from "@/components/ui/skeleton";
 import { MessageCircle, Plus, Bot, Sparkles } from "lucide-react";
 
-interface Agent {
-  id: string;
-  name: string;
-  role: string;
-  tone: string;
-  color: string;
-  description: string;
-  isBuiltIn: boolean;
-}
-
 export default function HomePage() {
-  const [agents, setAgents] = useState<Agent[]>([]);
-  const [sessions, setSessions] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    Promise.all([api.agents.list(), api.sessions.list()])
-      .then(([agentsData, sessionsData]) => {
-        setAgents(agentsData);
-        setSessions(sessionsData);
-      })
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, []);
+  const { data: agents, isLoading: agentsLoading } = useAgents();
+  const { data: sessions, isLoading: sessionsLoading } = useSessions();
 
   return (
     <div className="min-h-screen bg-background">
@@ -66,23 +46,23 @@ export default function HomePage() {
               </Link>
             </div>
 
-            {loading ? (
+            {agentsLoading ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {[1, 2, 3, 4].map((i) => (
-                  <Card key={i} className="animate-pulse">
+                  <Card key={i}>
                     <CardHeader className="space-y-2">
-                      <div className="h-4 bg-muted rounded w-1/3" />
-                      <div className="h-3 bg-muted rounded w-1/2" />
+                      <Skeleton className="h-4 w-1/3" />
+                      <Skeleton className="h-3 w-1/2" />
                     </CardHeader>
                     <CardContent>
-                      <div className="h-3 bg-muted rounded w-full" />
+                      <Skeleton className="h-3 w-full" />
                     </CardContent>
                   </Card>
                 ))}
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {agents.map((agent) => (
+                {agents?.map((agent) => (
                   <Card key={agent.id} className="group overflow-hidden transition-all hover:shadow-md">
                     <div className="h-1" style={{ backgroundColor: agent.color }} />
                     <CardHeader className="pb-3">
@@ -112,7 +92,7 @@ export default function HomePage() {
                           variant="outline"
                           size="sm"
                           className="w-full gap-1 transition-colors"
-                          style={{ ['--hover-bg' as string]: agent.color }}
+                          style={{ ["--hover-bg" as string]: agent.color }}
                         >
                           <MessageCircle className="h-3.5 w-3.5" />
                           开始对话
@@ -134,24 +114,33 @@ export default function HomePage() {
 
             <ScrollArea className="h-[400px] rounded-xl border">
               <div className="p-3 space-y-2">
-                {sessions.length === 0 ? (
+                {sessionsLoading ? (
+                  <div className="space-y-2">
+                    {[1, 2, 3].map((i) => (
+                      <div key={i} className="p-3 rounded-lg">
+                        <Skeleton className="h-4 w-3/4 mb-1" />
+                        <Skeleton className="h-3 w-1/3" />
+                      </div>
+                    ))}
+                  </div>
+                ) : sessions && sessions.length > 0 ? (
+                  sessions.map((session) => (
+                    <Link key={session.id} href={`/chat/${session.id}`}>
+                      <div className="p-3 rounded-lg hover:bg-accent transition-colors cursor-pointer">
+                        <p className="text-sm font-medium truncate">{session.title}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {new Date(session.updatedAt).toLocaleDateString("zh-CN")}
+                        </p>
+                      </div>
+                    </Link>
+                  ))
+                ) : (
                   <div className="text-center py-8 text-muted-foreground text-sm">
                     <Sparkles className="h-8 w-8 mx-auto mb-2 opacity-50" />
                     还没有对话记录
                     <br />
                     选择一个Agent开始吧
                   </div>
-                ) : (
-                  sessions.map((session) => (
-                    <Link key={session.id} href={`/chat/${session.id}`}>
-                      <div className="p-3 rounded-lg hover:bg-accent transition-colors cursor-pointer">
-                        <p className="text-sm font-medium truncate">{session.title}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          {new Date(session.updatedAt).toLocaleDateString('zh-CN')}
-                        </p>
-                      </div>
-                    </Link>
-                  ))
                 )}
               </div>
             </ScrollArea>

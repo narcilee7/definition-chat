@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { globalRegistry, parallelExecute, Agent } from '@ohme/agent-framework';
+import { globalRegistry, parallelExecute, Agent, StreamChunk } from '@ohme/agent-framework';
 import { SessionsService } from '../sessions/sessions.service';
 import { ChatDto, MultiChatDto } from './dto/chat.dto';
 
@@ -75,5 +75,34 @@ export class ChatService {
     }
 
     return { messages };
+  }
+
+  async *streamChat(dto: ChatDto): AsyncGenerator<StreamChunk> {
+    const agent = globalRegistry.getAgent(dto.agentId);
+
+    // Save user message
+    await this.sessions.addMessage(dto.sessionId, 'user', dto.content);
+
+    // Get history for context
+    const session = await this.sessions.findOne(dto.sessionId);
+    const history = (session?.messages || [])
+      .filter((m: any) => m.role === 'user' || m.role === 'agent')
+      .slice(-10)
+      .map((m: any) => ({ role: m.role as 'user' | 'assistant', content: m.content }));
+
+    // Stream through Agent Framework
+    let fullContent = '';
+    for await (const chunk of agent.streamChat(dto.content, history)) {
+      fullContent += chunk.content;
+      yield chunk;
+    }
+
+    // Save agent message
+    await this.sessions.addMessage(
+      dto.sessionId,
+      'agent',
+      fullContent,
+      dto.agentId,
+    );
   }
 }

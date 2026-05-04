@@ -4,29 +4,14 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import Header from "@/components/Header";
+import { MarkdownRenderer } from "@/components/markdown-renderer";
+import { useStreamChat } from "@/hooks/use-stream-chat";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-
-import { Send, Loader2, ArrowLeft, User } from "lucide-react";
-
-interface Message {
-  id: string;
-  role: string;
-  content: string;
-  agentId?: string;
-  createdAt: string;
-}
-
-interface Session {
-  id: string;
-  title: string;
-  mode: string;
-  agentIds: string[];
-  messages: Message[];
-}
+import { Send, Loader2, ArrowLeft, User, Square } from "lucide-react";
 
 interface Agent {
   id: string;
@@ -39,13 +24,22 @@ export default function ChatPage() {
   const router = useRouter();
   const sessionId = params.sessionId as string;
 
-  const [session, setSession] = useState<Session | null>(null);
+  const [session, setSession] = useState<any>(null);
   const [agents, setAgents] = useState<Record<string, Agent>>({});
-  const [input, setInput] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
   const [isInitLoading, setIsInitLoading] = useState(true);
+  const [input, setInput] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const isSingleAgent =
+    session?.mode === "single" && session?.agentIds?.length === 1;
+
+  const { messages, sendMessage, sendMultiMessage, isLoading, stop, initMessages } =
+    useStreamChat({
+      sessionId,
+      agentId: session?.agentIds?.[0],
+      onError: (err) => console.error(err),
+    });
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -53,7 +47,7 @@ export default function ChatPage() {
 
   useEffect(() => {
     scrollToBottom();
-  }, [session?.messages, isLoading, scrollToBottom]);
+  }, [messages, isLoading, scrollToBottom]);
 
   useEffect(() => {
     if (sessionId === "new") return;
@@ -74,11 +68,22 @@ export default function ChatPage() {
         api.agents.list(),
       ]);
       setSession(sessionData);
+
       const agentMap: Record<string, Agent> = {};
       agentsData.forEach((a: Agent) => {
         agentMap[a.id] = a;
       });
       setAgents(agentMap);
+
+      // Convert existing messages to our format
+      const existingMessages = (sessionData.messages || []).map((m: any) => ({
+        id: m.id,
+        role: m.role === "user" ? ("user" as const) : ("agent" as const),
+        content: m.content,
+        agentId: m.agentId,
+        createdAt: m.createdAt,
+      }));
+      initMessages(existingMessages);
     } catch (err) {
       console.error(err);
     } finally {
@@ -88,57 +93,13 @@ export default function ChatPage() {
 
   const handleSend = async () => {
     if (!input.trim() || isLoading || !session) return;
-
     const content = input.trim();
     setInput("");
-    setIsLoading(true);
 
-    // Optimistically update UI
-    const userMsg: Message = {
-      id: `temp-${Date.now()}`,
-      role: "user",
-      content,
-      createdAt: new Date().toISOString(),
-    };
-    setSession((prev) =>
-      prev ? { ...prev, messages: [...prev.messages, userMsg] } : prev
-    );
-
-    try {
-      if (session.mode === "single" && session.agentIds.length === 1) {
-        const res = await api.chat.send({
-          sessionId,
-          agentId: session.agentIds[0],
-          content,
-        });
-        setSession((prev) =>
-          prev ? { ...prev, messages: [...prev.messages, res.message] } : prev
-        );
-      } else {
-        const res = await api.chat.multi({
-          sessionId,
-          agentIds: session.agentIds,
-          content,
-        });
-        setSession((prev) =>
-          prev
-            ? { ...prev, messages: [...prev.messages, ...res.messages] }
-            : prev
-        );
-      }
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : "发送失败";
-      const errorMsgObj: Message = {
-        id: `err-${Date.now()}`,
-        role: "agent",
-        content: errorMsg,
-        createdAt: new Date().toISOString(),
-      };
-      setSession((prev) =>
-        prev ? { ...prev, messages: [...prev.messages, errorMsgObj] } : prev
-      );
-    } finally {
-      setIsLoading(false);
+    if (isSingleAgent) {
+      await sendMessage(content);
+    } else {
+      await sendMultiMessage(content, session.agentIds);
     }
   };
 
@@ -178,7 +139,7 @@ export default function ChatPage() {
           <div className="flex-1 min-w-0">
             <h1 className="text-sm font-semibold truncate">{session.title}</h1>
             <div className="flex gap-1.5 mt-0.5">
-              {session.agentIds.map((id) => (
+              {session.agentIds.map((id: string) => (
                 <Badge
                   key={id}
                   variant="outline"
@@ -199,7 +160,7 @@ export default function ChatPage() {
       {/* Messages */}
       <ScrollArea className="flex-1">
         <div className="max-w-3xl mx-auto px-4 py-6 space-y-5">
-          {session.messages.length === 0 && (
+          {messages.length === 0 && (
             <div className="text-center py-16">
               <p className="text-muted-foreground text-lg">开始你的对话</p>
               <p className="text-muted-foreground text-sm mt-1">
@@ -208,7 +169,7 @@ export default function ChatPage() {
             </div>
           )}
 
-          {session.messages.map((msg) => {
+          {messages.map((msg) => {
             const isUser = msg.role === "user";
             const agent = msg.agentId ? agents[msg.agentId] : null;
 
@@ -233,7 +194,7 @@ export default function ChatPage() {
                 </Avatar>
 
                 <div
-                  className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
+                  className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm ${
                     isUser
                       ? "bg-primary text-primary-foreground"
                       : "bg-muted text-foreground"
@@ -247,13 +208,22 @@ export default function ChatPage() {
                       {agent.name}
                     </p>
                   )}
-                  <p className="whitespace-pre-wrap">{msg.content}</p>
+                  {isUser ? (
+                    <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+                  ) : (
+                    <div className="leading-relaxed">
+                      <MarkdownRenderer content={msg.content} />
+                      {msg.isStreaming && (
+                        <span className="inline-block w-1.5 h-4 ml-0.5 bg-primary/60 animate-pulse align-middle rounded-sm" />
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             );
           })}
 
-          {isLoading && (
+          {isLoading && messages[messages.length - 1]?.role !== "agent" && (
             <div className="flex gap-3">
               <Avatar className="h-8 w-8 flex-shrink-0">
                 <AvatarFallback className="bg-muted text-xs">
@@ -289,20 +259,20 @@ export default function ChatPage() {
               className="min-h-[44px] resize-none rounded-xl"
             />
             <Button
-              onClick={handleSend}
-              disabled={isLoading || !input.trim()}
+              onClick={isLoading ? stop : handleSend}
+              disabled={!isLoading && !input.trim()}
               size="icon"
               className="h-10 w-10 rounded-xl flex-shrink-0"
             >
               {isLoading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <Square className="h-4 w-4" />
               ) : (
                 <Send className="h-4 w-4" />
               )}
             </Button>
           </div>
           <p className="text-[10px] text-muted-foreground mt-2 text-center">
-            Enter 发送 · Shift + Enter 换行
+            {isLoading ? "点击方块停止生成" : "Enter 发送 · Shift + Enter 换行"}
           </p>
         </div>
       </div>
