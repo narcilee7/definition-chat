@@ -15,6 +15,15 @@ const nextConfig = {
       },
     ];
   },
+  async redirects() {
+    return [
+      { source: '/reflect', destination: '/', permanent: false },
+      { source: '/explore', destination: '/', permanent: false },
+      { source: '/lenses', destination: '/', permanent: false },
+      { source: '/lenses/build', destination: '/', permanent: false },
+      { source: '/model', destination: '/progress', permanent: false },
+    ];
+  },
 };
 
 export default nextConfig;

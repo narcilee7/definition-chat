@@ -1,20 +1,20 @@
 import { Injectable } from '@nestjs/common';
 import { createLogger } from '@ohme/observability';
-import { PrismaService } from '../prisma/prisma.service';
 import { LLMFallbackService } from '../llm/llm-fallback.service';
-import { compileSystemPrompt } from '@ohme/prompts';
+import { findLensFromRequest, LENSES, LensDefinition } from '../lenses/lens-definitions';
 
 export interface RefractionRequest {
   userId: string;
   question: string;
-  approachIds: string[];
+  lensIds?: string[];
+  approachIds?: string[];
+  customLenses?: unknown[];
 }
 
 export interface RefractionResult {
-  approachId: string;
-  approachName: string;
+  lensId: string;
+  lensName: string;
   content: string;
-  techniques: string[];
   latencyMs: number;
 }
 
@@ -22,105 +22,99 @@ export interface RefractionResult {
 export class RefractionService {
   private readonly logger = createLogger('RefractionService');
 
-  constructor(
-    private prisma: PrismaService,
-    private llm: LLMFallbackService,
-  ) {}
+  constructor(private llm: LLMFallbackService) {}
 
   async refract(data: RefractionRequest): Promise<RefractionResult[]> {
-    const { userId, question, approachIds } = data;
+    const { userId, question } = data;
+    const selectedIds = data.lensIds ?? data.approachIds ?? ['cognitive-judgment', 'relationship-pattern', 'values'];
+    const selectedLenses = selectedIds
+      .map((id) => findLensFromRequest(id, data.customLenses))
+      .filter((lens): lens is LensDefinition => Boolean(lens));
 
-    const approaches = await this.prisma.therapyApproach.findMany({
-      where: { name: { in: approachIds } },
-    });
-
-    const personas = await this.prisma.therapistPersona.findMany({
-      where: {
-        approachId: { in: approaches.map((a) => a.id) },
-        isBuiltIn: true,
-      },
-      include: { approach: true },
-    });
-
-    const personaMap = new Map<string, typeof personas[0]>();
-    for (const approach of approaches) {
-      const persona = personas.find((p) => p.approachId === approach.id);
-      if (persona) personaMap.set(approach.id, persona);
-    }
+    const lenses = selectedLenses.length > 0 ? selectedLenses : LENSES.slice(0, 3);
 
     const results = await Promise.all(
-      approaches.map(async (approach) => {
+      lenses.map(async (lens) => {
         const start = Date.now();
-        const persona = personaMap.get(approach.id);
-
-        if (!persona) {
-          return {
-            approachId: approach.name,
-            approachName: approach.displayName,
-            content: '该流派暂无可用咨询师。',
-            techniques: [],
-            latencyMs: 0,
-          };
-        }
-
-        const systemPrompt = compileSystemPrompt({
-          approachName: approach.name,
-          persona: {
-            name: persona.name,
-            description: persona.description,
-            styleTraits: (persona.styleTraits as any) || { directness: 0.5, warmth: 0.5, structure: 0.5, depth: 0.5 },
-            voiceTone: persona.voiceTone,
-            specialties: persona.specialties,
-            boundaries: persona.boundaries,
-            responseLength: 'concise',
-          },
-          phaseContext: {
-            phase: 'theme_work' as any,
-            sessionNumber: 1,
-          },
-        });
-
-        const refractionPrompt = `${systemPrompt}\n\n---\n\n【特殊任务：流派折射】\n来访者提出了一个问题，需要你从${approach.displayName}的角度进行分析。\n\n要求：\n- 提供该流派的核心视角（1-2 句话）\n- 提出 2-3 个该流派会关注的问题\n- 建议 1-2 个该流派的干预技术\n- 总长度不超过 200 字\n- 在末尾标注使用的技术（格式：【技术名称】）`;
 
         try {
-          const res = await this.llm.chat(
+          const response = await this.llm.chat(
             [
-              { role: 'system', content: refractionPrompt },
+              { role: 'system', content: this.buildLensPrompt(lens) },
               { role: 'user', content: question },
             ],
-            { temperature: 0.7, maxTokens: 512 },
+            { temperature: 0.65, maxTokens: 700 },
           );
 
-          const techniqueMatches = res.content.match(/【(.+?)】/g);
-          const techniques = techniqueMatches
-            ? techniqueMatches.map((m) => m.replace(/[【】]/g, ''))
-            : [];
-
           return {
-            approachId: approach.name,
-            approachName: approach.displayName,
-            content: res.content,
-            techniques,
+            lensId: lens.id,
+            lensName: lens.name,
+            content: response.content.trim(),
             latencyMs: Date.now() - start,
           };
-        } catch (err) {
-          this.logger.error('Refraction failed', { approach: approach.name, error: err });
+        } catch (error) {
+          this.logger.error('Lens refraction failed', { lens: lens.id, error });
           return {
-            approachId: approach.name,
-            approachName: approach.displayName,
-            content: '分析过程中出现错误，请稍后重试。',
-            techniques: [],
+            lensId: lens.id,
+            lensName: lens.name,
+            content: '这个 Lens 暂时没有完成折射。你可以稍后重试，或先换一个视角看这件事。',
             latencyMs: Date.now() - start,
           };
         }
       }),
     );
 
-    this.logger.info('Refraction completed', {
+    this.logger.info('Lens refraction completed', {
       userId,
-      approachCount: approachIds.length,
+      lensCount: lenses.length,
     });
 
     return results;
+  }
+
+  private buildLensPrompt(lens: LensDefinition): string {
+    return `你是 OhMe 的一个 Lens，不是医生、咨询师或人生导师。
+
+Lens 名称：${lens.name}
+Lens 描述：${lens.shortDescription}
+
+你天然会看见：
+${lens.sees.map((item) => `- ${item}`).join('\n')}
+
+你容易忽略：
+${lens.ignores.map((item) => `- ${item}`).join('\n')}
+
+你如何解释痛苦：
+${lens.explainsPainAs}
+
+你常用的问题：
+${lens.coreQuestions.map((item) => `- ${item}`).join('\n')}
+
+你常用的探索动作：
+${lens.explorationMoves.map((item) => `- ${item}`).join('\n')}
+
+风险边界：
+${lens.risks.map((item) => `- ${item}`).join('\n')}
+
+任务：用户会给你一个困扰。请只从这个 Lens 出发折射它。
+
+输出必须使用下面 5 个小标题，不要增删标题：
+
+理解
+用 1-2 句话说明这个 Lens 如何理解该问题。不要下诊断。
+
+看见
+列出 2-3 个这个 Lens 看见的信号。
+
+盲区
+用 1 句话提醒这个 Lens 可能忽略什么。
+
+关键问题
+只提出 1 个最值得用户继续看的问题。
+
+小探索动作
+给出 1 个轻量、非医疗、可在今天完成的探索动作。
+
+风格要求：克制、清晰、有洞察；不鸡汤；不说“你应该”；不承诺疗效；总长度不超过 260 字。`;
   }
 }

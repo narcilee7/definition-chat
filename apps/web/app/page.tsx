@@ -1,76 +1,107 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Textarea } from "@/components/ui/textarea";
 import { ModeToggle } from "@/components/mode-toggle";
-import { Sparkles, MessageCircle, Wand2, Loader2, ClipboardCheck, Shield, BarChart3, Split } from "lucide-react";
+import { MessageCircle, Shield, ArrowRight, Loader2, Clock, Settings } from "lucide-react";
 
-interface Persona {
+const QUICK_TOPICS = [
+  { label: "焦虑不安", prompt: "最近总是感到焦虑不安，心里七上八下的，不知道怎么回事。" },
+  { label: "情绪低落", prompt: "最近情绪很低落，对什么都提不起兴趣，感觉很累。" },
+  { label: "关系困扰", prompt: "我和身边人的关系出了问题，不知道该怎么处理。" },
+  { label: "失眠", prompt: "最近晚上睡不着，脑子里停不下来，白天又很疲惫。" },
+  { label: "工作压力", prompt: "工作压力很大，感觉自己快撑不住了。" },
+  { label: "自我怀疑", prompt: "我总是觉得自己不够好，做什么都担心失败。" },
+];
+
+interface HistorySession {
   id: string;
-  name: string;
-  description: string;
-  approach: { displayName: string; name: string };
-  voiceTone: string;
-  specialties: string[];
+  sessionNumber: number;
+  presentingProblem: string | null;
+  updatedAt: string;
+  therapist: { id: string; name: string } | null;
 }
-
-const toneLabels: Record<string, string> = {
-  gentle_direct: "温和直接",
-  warm_accepting: "温暖接纳",
-  sharp_challenging: "犀利挑战",
-  poetic_intuitive: "诗意直觉",
-};
 
 export default function HomePage() {
   const router = useRouter();
-  const [personas, setPersonas] = useState<Persona[]>([]);
-  const [sessions, setSessions] = useState<any[]>([]);
+  const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [selectedPersona, setSelectedPersona] = useState<string | null>(null);
+  const [history, setHistory] = useState<HistorySession[]>([]);
+
+  const canStart = input.trim().length > 0;
 
   useEffect(() => {
-    api.personas.list().then(setPersonas).catch(console.error);
-    api.sessions.list().then(setSessions).catch(console.error);
+    // 加载历史会话
+    api.sessions.list("default")
+      .then((data) => {
+        setHistory(data.slice(0, 5));
+      })
+      .catch(() => {});
   }, []);
 
   const handleStart = async () => {
-    if (!selectedPersona || isLoading) return;
+    if (!canStart || isLoading) return;
     setIsLoading(true);
+
     try {
+      const personas = await api.personas.list();
+      const defaultTherapist = personas.find((p: any) => p.isBuiltIn) || personas[0];
+      if (!defaultTherapist) throw new Error("No therapist available");
+
       const session = await api.therapy.createSession({
         userId: "default",
-        therapistId: selectedPersona,
+        therapistId: defaultTherapist.id,
+        presentingProblem: input.trim(),
       });
-      router.push(`/chat/${session.sessionId}`);
+
+      router.push(`/chat/${session.sessionId}?start=1`);
     } catch (err) {
-      console.error(err);
+      console.error("Failed to start session:", err);
       setIsLoading(false);
     }
   };
 
-  const approachColors: Record<string, string> = {
-    cbt: "bg-blue-500",
-    dbt: "bg-violet-500",
-    act: "bg-emerald-500",
-    psychodynamic: "bg-gray-500",
+  const handleQuickStart = (prompt: string) => {
+    setInput(prompt);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleStart();
+    }
+  };
+
+  const formatTime = (dateStr: string) => {
+    const d = new Date(dateStr);
+    const now = new Date();
+    const diff = now.getTime() - d.getTime();
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    if (days === 0) return "今天";
+    if (days === 1) return "昨天";
+    if (days < 7) return `${days} 天前`;
+    return d.toLocaleDateString("zh-CN", { month: "short", day: "numeric" });
   };
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
       {/* Header */}
-      <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur">
-        <div className="max-w-4xl mx-auto flex h-14 items-center justify-between px-4">
+      <header className="w-full border-b bg-background/95 backdrop-blur">
+        <div className="mx-auto flex h-14 max-w-3xl items-center justify-between px-4">
           <div className="flex items-center gap-2 font-bold text-lg tracking-tight">
-            <Sparkles className="h-5 w-5 text-primary" />
+            <MessageCircle className="h-5 w-5 text-primary" />
             OhMe
           </div>
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="sm" onClick={() => router.push("/build")}>
-              <Wand2 className="h-4 w-4 mr-1" />
-              创建咨询师
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={() => router.push("/safety")}>
+              <Shield className="mr-1 h-4 w-4" />
+              安全计划
+            </Button>
+            <Button variant="ghost" size="icon" onClick={() => router.push("/settings")} aria-label="设置">
+              <Settings className="h-4 w-4" />
             </Button>
             <ModeToggle />
           </div>
@@ -78,128 +109,108 @@ export default function HomePage() {
       </header>
 
       {/* Main */}
-      <main className="flex-1 max-w-4xl mx-auto w-full px-4 py-8">
-        {/* Hero */}
-        <div className="text-center space-y-3 mb-10">
-          <h1 className="text-3xl font-semibold tracking-tight">
-            选择你的咨询师
-          </h1>
-          <p className="text-muted-foreground max-w-lg mx-auto">
-            每位咨询师有不同的流派和风格。选择最让你感到舒服的，开始你的治疗旅程。
-          </p>
-        </div>
+      <main className="flex-1 flex flex-col items-center justify-center px-4 py-12">
+        <div className="w-full max-w-2xl space-y-8">
+          {/* Title */}
+          <div className="text-center space-y-3">
+            <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">
+              最近有什么想聊的吗？
+            </h1>
+            <p className="text-muted-foreground">
+              一个困扰、一种情绪、一段关系——从这里开始。
+            </p>
+          </div>
 
-        {/* Persona Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-10">
-          {personas.map((persona) => (
-            <Card
-              key={persona.id}
-              className={`cursor-pointer transition-all hover:shadow-md ${
-                selectedPersona === persona.id
-                  ? "ring-2 ring-primary border-primary"
-                  : ""
-              }`}
-              onClick={() => setSelectedPersona(persona.id)}
+          {/* Input */}
+          <div className="space-y-4">
+            <Textarea
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="比如：最近工作压力很大，晚上睡不着，总觉得自己的状态不对劲..."
+              rows={4}
+              className="resize-none text-base rounded-xl"
+              disabled={isLoading}
+            />
+            <Button
+              onClick={handleStart}
+              disabled={!canStart || isLoading}
+              size="lg"
+              className="w-full rounded-xl"
             >
-              <CardHeader className="pb-2">
-                <div className="flex items-center gap-3">
-                  <div className={`w-3 h-3 rounded-full ${approachColors[persona.approach.name] || "bg-primary"}`} />
-                  <CardTitle className="text-base">{persona.name}</CardTitle>
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
-                    {persona.approach.displayName}
-                  </span>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <p className="text-sm text-muted-foreground">{persona.description}</p>
-                <div className="flex flex-wrap gap-1">
-                  {persona.specialties.map((s) => (
-                    <span key={s} className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary">
-                      {s}
-                    </span>
-                  ))}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  风格：{toneLabels[persona.voiceTone] || persona.voiceTone}
-                </p>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  准备中...
+                </>
+              ) : (
+                <>
+                  开始对话
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </>
+              )}
+            </Button>
+          </div>
 
-        {/* Quick Actions */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
-          <Button variant="outline" onClick={() => router.push("/assess")} className="h-auto py-3 flex-col gap-1">
-            <ClipboardCheck className="h-4 w-4" />
-            <span className="text-xs">量表评估</span>
-          </Button>
-          <Button variant="outline" onClick={() => router.push("/reflect")} className="h-auto py-3 flex-col gap-1">
-            <Split className="h-4 w-4" />
-            <span className="text-xs">流派折射</span>
-          </Button>
-          <Button variant="outline" onClick={() => router.push("/progress")} className="h-auto py-3 flex-col gap-1">
-            <BarChart3 className="h-4 w-4" />
-            <span className="text-xs">进度追踪</span>
-          </Button>
-          <Button variant="outline" onClick={() => router.push("/safety")} className="h-auto py-3 flex-col gap-1">
-            <Shield className="h-4 w-4" />
-            <span className="text-xs">安全中心</span>
-          </Button>
-        </div>
-
-        {/* Start Button */}
-        <div className="flex justify-center">
-          <Button
-            size="lg"
-            onClick={handleStart}
-            disabled={!selectedPersona || isLoading}
-            className="min-w-[200px]"
-          >
-            {isLoading ? (
-              <Loader2 className="h-4 w-4 animate-spin mr-2" />
-            ) : (
-              <MessageCircle className="h-4 w-4 mr-2" />
-            )}
-            开始会话
-          </Button>
-        </div>
-
-        {/* Recent Sessions */}
-        {sessions.length > 0 && (
-          <div className="mt-12">
-            <h2 className="text-sm font-medium text-muted-foreground mb-3">
-              继续探索
-            </h2>
-            <div className="space-y-2">
-              {sessions.slice(0, 5).map((session) => (
+          {/* Quick Topics */}
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground text-center">或者快速开始：</p>
+            <div className="flex flex-wrap justify-center gap-2">
+              {QUICK_TOPICS.map((topic) => (
                 <button
-                  key={session.id}
-                  onClick={() => router.push(`/chat/${session.id}`)}
-                  className="w-full text-left p-3 rounded-xl bg-muted/50 hover:bg-accent transition-colors"
+                  key={topic.label}
+                  onClick={() => handleQuickStart(topic.prompt)}
+                  className="rounded-full border px-4 py-2 text-sm transition-colors hover:bg-accent hover:border-accent"
+                  disabled={isLoading}
                 >
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">
-                      第 {session.sessionNumber} 次会话
-                      {session.therapist && (
-                        <span className="text-muted-foreground ml-2">
-                          · {session.therapist.name}
-                        </span>
-                      )}
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      {new Date(session.updatedAt).toLocaleDateString("zh-CN")}
-                    </span>
-                  </div>
-                  {session.insights && session.insights.length > 0 && (
-                    <p className="text-xs text-muted-foreground mt-1 truncate">
-                      {session.insights[session.insights.length - 1]}
-                    </p>
-                  )}
+                  {topic.label}
                 </button>
               ))}
             </div>
           </div>
-        )}
+
+          {/* History */}
+          {history.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Clock className="h-4 w-4" />
+                <span>最近对话</span>
+              </div>
+              <div className="space-y-2">
+                {history.map((session) => (
+                  <button
+                    key={session.id}
+                    onClick={() => router.push(`/chat/${session.id}`)}
+                    className="w-full text-left rounded-xl border p-4 transition-colors hover:bg-accent"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm truncate">
+                          {session.presentingProblem || `第 ${session.sessionNumber} 次对话`}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {session.therapist?.name} · {formatTime(session.updatedAt)}
+                        </p>
+                      </div>
+                      <ArrowRight className="h-4 w-4 text-muted-foreground flex-shrink-0 ml-2" />
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Disclaimer */}
+          <div className="border-t pt-6 text-center">
+            <p className="text-xs text-muted-foreground leading-relaxed max-w-md mx-auto">
+              💬 OhMe 是结构化 AI 心理咨询，不是聊天机器人。
+              <br />
+              每次对话都有临床目标，对话内容受隐私保护。
+              <br />
+              本服务提供心理支持，但不替代专业医疗诊断和治疗。
+            </p>
+          </div>
+        </div>
       </main>
     </div>
   );

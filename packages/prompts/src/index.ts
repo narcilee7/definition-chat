@@ -36,3 +36,17 @@ export {
   ASSESSMENT_SCORING_PROMPT,
   SESSION_OUTCOME_PROMPT,
 } from './assessment';
+
+// V5: Integrative Therapist Prompt System
+export {
+  V5_THERAPIST_CORE,
+  buildV5PhaseAwareness,
+  buildV5CaseFormulation,
+  buildV5PersonaStyle,
+  buildV5PreviousInsights,
+  buildV5SkillsIntroduced,
+  compileV5SystemPrompt,
+  estimateV5Tokens,
+  compressV5IfNeeded,
+} from './v5';
+export type { V5CompileOptions } from './v5';

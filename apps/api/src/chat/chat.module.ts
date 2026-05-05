@@ -6,6 +6,7 @@ import { PromptBuilderService } from '../therapy/prompt-builder.service';
 import { RiskDetectorService } from '../risk/risk-detector.service';
 import { CrisisInterventionService } from '../risk/crisis-intervention.service';
 import { LLMFallbackService } from '../llm/llm-fallback.service';
+import { CaseFormulationService } from '../case-formulation/case-formulation.service';
 
 @Module({
   providers: [
@@ -15,6 +16,7 @@ import { LLMFallbackService } from '../llm/llm-fallback.service';
     RiskDetectorService,
     CrisisInterventionService,
     LLMFallbackService,
+    CaseFormulationService,
   ],
   controllers: [ChatController],
 })

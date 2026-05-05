@@ -5,7 +5,7 @@ import { api } from "@/lib/api";
 
 export interface ChatMessage {
   id: string;
-  role: "user" | "therapist";
+  role: "user" | "assistant" | "therapist";
   content: string;
   isStreaming?: boolean;
   createdAt?: string;
@@ -44,7 +44,7 @@ export function useStreamChat({ sessionId, onError }: UseStreamChatOptions) {
         ...prev,
         {
           id: agentMsgId,
-          role: "therapist",
+          role: "assistant",
           content: "",
           isStreaming: true,
         },
