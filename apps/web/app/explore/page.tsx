@@ -4,11 +4,12 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { findLens } from "@/lib/lenses";
+import { extractNewInterpretation, saveSelfModelEntry } from "@/lib/self-model";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { ModeToggle } from "@/components/mode-toggle";
-import { ArrowLeft, Loader2, Sparkles } from "lucide-react";
+import { ArrowLeft, Check, Loader2, Sparkles } from "lucide-react";
 
 interface ExploreResponse {
   lensId: string;
@@ -27,6 +28,7 @@ export default function ExplorePage() {
   const [completeResult, setCompleteResult] = useState<ExploreResponse | null>(null);
   const [isStarting, setIsStarting] = useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
+  const [savedEntryId, setSavedEntryId] = useState<string | null>(null);
 
   const lens = useMemo(() => findLens(lensId), [lensId]);
 
@@ -60,11 +62,26 @@ export default function ExplorePage() {
         hypothesis: startResult?.content,
       });
       setCompleteResult(result);
+      setSavedEntryId(null);
     } catch (error) {
       console.error(error);
     } finally {
       setIsCompleting(false);
     }
+  };
+
+  const saveToSelfModel = () => {
+    if (!completeResult) return;
+
+    const saved = saveSelfModelEntry({
+      question,
+      lensId,
+      lensName: completeResult.lensName,
+      userResponse,
+      exploration: completeResult.content,
+      newInterpretation: extractNewInterpretation(completeResult.content),
+    });
+    setSavedEntryId(saved.id);
   };
 
   return (
@@ -140,8 +157,12 @@ export default function ExplorePage() {
                 <Button variant="outline" onClick={() => router.push("/")} className="flex-1">
                   回到首页
                 </Button>
-                <Button variant="outline" disabled className="flex-1">
-                  保存到 Self Model 待接入
+                <Button variant="outline" onClick={saveToSelfModel} disabled={Boolean(savedEntryId)} className="flex-1">
+                  {savedEntryId ? <Check className="mr-2 h-4 w-4" /> : null}
+                  {savedEntryId ? "已保存到 Self Model" : "保存到 Self Model"}
+                </Button>
+                <Button onClick={() => router.push("/model")} className="flex-1">
+                  查看 Self Model
                 </Button>
               </div>
             </CardContent>

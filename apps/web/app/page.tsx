@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ModeToggle } from "@/components/mode-toggle";
 import { LENS_OPTIONS } from "@/lib/lenses";
-import { ArrowRight, Compass, Library, ScanLine, Sparkles, Wand2 } from "lucide-react";
+import { ArrowRight, Compass, Library, NotebookText, ScanLine, Sparkles, Wand2 } from "lucide-react";
 
 export default function HomePage() {
   const router = useRouter();
@@ -49,6 +49,10 @@ export default function HomePage() {
             OhMe
           </div>
           <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={() => router.push("/model")}>
+              <NotebookText className="mr-1 h-4 w-4" />
+              Self Model
+            </Button>
             <Button variant="ghost" size="sm" disabled>
               <Wand2 className="mr-1 h-4 w-4" />
               Build Lens 待接入
