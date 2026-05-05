@@ -123,7 +123,7 @@ export class BuilderService {
       name: agent.name,
       description: agent.description,
       systemPrompt,
-      color: agent.color,
+      color: '#2563EB',
       temperature: 0.7,
       maxTokens: 512,
     });

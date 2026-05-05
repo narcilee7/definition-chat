@@ -1,144 +1,186 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
-import { useSessions } from "@/hooks/use-sessions";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ModeToggle } from "@/components/mode-toggle";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Send, MessageCircle, Sparkles, Loader2 } from "lucide-react";
+import { Sparkles, MessageCircle, Wand2, Loader2 } from "lucide-react";
+
+interface Persona {
+  id: string;
+  name: string;
+  description: string;
+  approach: { displayName: string; name: string };
+  voiceTone: string;
+  specialties: string[];
+}
+
+const toneLabels: Record<string, string> = {
+  gentle_direct: "温和直接",
+  warm_accepting: "温暖接纳",
+  sharp_challenging: "犀利挑战",
+  poetic_intuitive: "诗意直觉",
+};
 
 export default function HomePage() {
   const router = useRouter();
-  const { data: sessions } = useSessions();
-  const [input, setInput] = useState("");
+  const [personas, setPersonas] = useState<Persona[]>([]);
+  const [sessions, setSessions] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [selectedPersona, setSelectedPersona] = useState<string | null>(null);
+
+  useEffect(() => {
+    api.personas.list().then(setPersonas).catch(console.error);
+    api.sessions.list().then(setSessions).catch(console.error);
+  }, []);
 
   const handleStart = async () => {
-    if (!input.trim() || isLoading) return;
+    if (!selectedPersona || isLoading) return;
     setIsLoading(true);
     try {
-      const session = await api.sessions.create({
-        intent: input.trim().slice(0, 100),
+      const session = await api.therapy.createSession({
+        userId: "default",
+        therapistId: selectedPersona,
       });
-      router.push(`/chat/${session.id}`);
+      router.push(`/chat/${session.sessionId}`);
     } catch (err) {
       console.error(err);
       setIsLoading(false);
     }
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleStart();
-    }
+  const approachColors: Record<string, string> = {
+    cbt: "bg-blue-500",
+    dbt: "bg-violet-500",
+    act: "bg-emerald-500",
+    psychodynamic: "bg-gray-500",
   };
-
-  const quickPrompts = [
-    "我最近工作压力好大",
-    "我和家人的关系让我疲惫",
-    "我不知道自己想要什么",
-    "做了个奇怪的梦",
-  ];
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
       {/* Header */}
       <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur">
-        <div className="max-w-2xl mx-auto flex h-14 items-center justify-between px-4">
+        <div className="max-w-4xl mx-auto flex h-14 items-center justify-between px-4">
           <div className="flex items-center gap-2 font-bold text-lg tracking-tight">
             <Sparkles className="h-5 w-5 text-primary" />
             OhMe
           </div>
-          <ModeToggle />
+          <div className="flex items-center gap-3">
+            <Button variant="ghost" size="sm" onClick={() => router.push("/build")}>
+              <Wand2 className="h-4 w-4 mr-1" />
+              创建咨询师
+            </Button>
+            <ModeToggle />
+          </div>
         </div>
       </header>
 
       {/* Main */}
-      <main className="flex-1 flex flex-col items-center justify-center px-4 py-12">
-        <div className="w-full max-w-xl space-y-8">
-          {/* Hero */}
-          <div className="text-center space-y-3">
-            <h1 className="text-2xl font-semibold tracking-tight">
-              今天，是什么在困扰你？
-            </h1>
-            <p className="text-muted-foreground text-sm">
-              不用想太多，就像和一个懂你的朋友聊天
-            </p>
-          </div>
-
-          {/* Input */}
-          <div className="relative">
-            <Textarea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="随便说说..."
-              rows={3}
-              disabled={isLoading}
-              className="min-h-[80px] resize-none rounded-2xl pr-14 text-base"
-            />
-            <Button
-              onClick={handleStart}
-              disabled={!input.trim() || isLoading}
-              size="icon"
-              className="absolute bottom-3 right-3 h-9 w-9 rounded-xl"
-            >
-              {isLoading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Send className="h-4 w-4" />
-              )}
-            </Button>
-          </div>
-
-          {/* Quick prompts */}
-          <div className="flex flex-wrap gap-2 justify-center">
-            {quickPrompts.map((prompt) => (
-              <button
-                key={prompt}
-                onClick={() => setInput(prompt)}
-                className="px-3 py-1.5 rounded-full text-xs bg-muted hover:bg-accent transition-colors text-muted-foreground"
-              >
-                {prompt}
-              </button>
-            ))}
-          </div>
+      <main className="flex-1 max-w-4xl mx-auto w-full px-4 py-8">
+        {/* Hero */}
+        <div className="text-center space-y-3 mb-10">
+          <h1 className="text-3xl font-semibold tracking-tight">
+            选择你的咨询师
+          </h1>
+          <p className="text-muted-foreground max-w-lg mx-auto">
+            每位咨询师有不同的流派和风格。选择最让你感到舒服的，开始你的治疗旅程。
+          </p>
         </div>
-      </main>
 
-      {/* Recent sessions */}
-      {sessions && sessions.length > 0 && (
-        <div className="border-t bg-muted/30">
-          <div className="max-w-xl mx-auto px-4 py-6">
-            <h2 className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-1.5">
-              <MessageCircle className="h-3.5 w-3.5" />
+        {/* Persona Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-10">
+          {personas.map((persona) => (
+            <Card
+              key={persona.id}
+              className={`cursor-pointer transition-all hover:shadow-md ${
+                selectedPersona === persona.id
+                  ? "ring-2 ring-primary border-primary"
+                  : ""
+              }`}
+              onClick={() => setSelectedPersona(persona.id)}
+            >
+              <CardHeader className="pb-2">
+                <div className="flex items-center gap-3">
+                  <div className={`w-3 h-3 rounded-full ${approachColors[persona.approach.name] || "bg-primary"}`} />
+                  <CardTitle className="text-base">{persona.name}</CardTitle>
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                    {persona.approach.displayName}
+                  </span>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <p className="text-sm text-muted-foreground">{persona.description}</p>
+                <div className="flex flex-wrap gap-1">
+                  {persona.specialties.map((s) => (
+                    <span key={s} className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+                      {s}
+                    </span>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  风格：{toneLabels[persona.voiceTone] || persona.voiceTone}
+                </p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {/* Start Button */}
+        <div className="flex justify-center">
+          <Button
+            size="lg"
+            onClick={handleStart}
+            disabled={!selectedPersona || isLoading}
+            className="min-w-[200px]"
+          >
+            {isLoading ? (
+              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+            ) : (
+              <MessageCircle className="h-4 w-4 mr-2" />
+            )}
+            开始会话
+          </Button>
+        </div>
+
+        {/* Recent Sessions */}
+        {sessions.length > 0 && (
+          <div className="mt-12">
+            <h2 className="text-sm font-medium text-muted-foreground mb-3">
               继续探索
             </h2>
-            <ScrollArea className="h-[180px]">
-              <div className="space-y-2">
-                {sessions.slice(0, 10).map((session) => (
-                  <button
-                    key={session.id}
-                    onClick={() => router.push(`/chat/${session.id}`)}
-                    className="w-full text-left p-3 rounded-xl bg-background hover:bg-accent transition-colors"
-                  >
-                    <p className="text-sm font-medium truncate">{session.title}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {session.notes
-                        ? session.notes.slice(0, 60) + "..."
-                        : new Date(session.updatedAt).toLocaleDateString("zh-CN")}
+            <div className="space-y-2">
+              {sessions.slice(0, 5).map((session) => (
+                <button
+                  key={session.id}
+                  onClick={() => router.push(`/chat/${session.id}`)}
+                  className="w-full text-left p-3 rounded-xl bg-muted/50 hover:bg-accent transition-colors"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">
+                      第 {session.sessionNumber} 次会话
+                      {session.therapist && (
+                        <span className="text-muted-foreground ml-2">
+                          · {session.therapist.name}
+                        </span>
+                      )}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {new Date(session.updatedAt).toLocaleDateString("zh-CN")}
+                    </span>
+                  </div>
+                  {session.insights && session.insights.length > 0 && (
+                    <p className="text-xs text-muted-foreground mt-1 truncate">
+                      {session.insights[session.insights.length - 1]}
                     </p>
-                  </button>
-                ))}
-              </div>
-            </ScrollArea>
+                  )}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </main>
     </div>
   );
 }

@@ -1,12 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { createLogger } from '@ohme/observability';
 import { PrismaService } from '../prisma/prisma.service';
-import { SessionsService } from '../sessions/sessions.service';
-import { InsightEngine } from '../insight/insight.engine';
-import { StreamChunk } from '@ohme/agent-framework';
-import { buildGuidePrompt } from '@ohme/prompts';
-import { ChatDto } from './dto/chat.dto';
+import { SessionManagerService } from '../therapy/session-manager.service';
+import { PromptBuilderService } from '../therapy/prompt-builder.service';
+import { RiskDetectorService } from '../risk/risk-detector.service';
+import { CrisisInterventionService } from '../risk/crisis-intervention.service';
 import { LLMFallbackService } from '../llm/llm-fallback.service';
+import { TherapyChatDto } from './dto/therapy-chat.dto';
+import { StreamChunk } from '@ohme/agent-framework';
 
 @Injectable()
 export class ChatService {
@@ -14,86 +15,173 @@ export class ChatService {
 
   constructor(
     private prisma: PrismaService,
-    private sessions: SessionsService,
-    private insight: InsightEngine,
+    private sessionManager: SessionManagerService,
+    private promptBuilder: PromptBuilderService,
+    private riskDetector: RiskDetectorService,
+    private crisisService: CrisisInterventionService,
     private llm: LLMFallbackService,
   ) {}
 
-  async *streamChat(dto: ChatDto): AsyncGenerator<StreamChunk> {
-    await this.sessions.addMessage(dto.sessionId, 'user', dto.content);
+  async *streamChat(dto: TherapyChatDto): AsyncGenerator<StreamChunk & { riskLevel?: string; technique?: string }> {
+    const startTime = Date.now();
 
-    const systemPrompt = await this.buildSystemPrompt();
-    const session = await this.sessions.findOne(dto.sessionId);
-    const history = (session?.messages || [])
-      .slice(-20)
-      .map((m: any) => ({ role: m.role as 'user' | 'assistant', content: m.content }));
-
-    const messages = [
-      { role: 'system' as const, content: systemPrompt },
-      ...history,
-      { role: 'user' as const, content: dto.content },
-    ];
-
-    let fullContent = '';
-    for await (const chunk of this.llm.stream(messages, { temperature: 0.7, maxTokens: 1024 })) {
-      fullContent += chunk.content;
-      yield chunk;
+    // 1. Load session state
+    const sessionState = await this.sessionManager.getSessionState(dto.sessionId);
+    if (!sessionState) {
+      throw new Error('Session not found');
     }
 
-    await this.sessions.addMessage(dto.sessionId, 'assistant', fullContent);
-
-    setImmediate(() => {
-      this.insight.processSession(dto.sessionId).catch((err) => {
-        this.logger.error('Insight processing failed', { sessionId: dto.sessionId, error: err });
-      });
+    // 2. Save user message
+    await this.prisma.sessionMessage.create({
+      data: {
+        sessionId: dto.sessionId,
+        role: 'user',
+        content: dto.content,
+      },
     });
-  }
 
-  async chat(dto: ChatDto) {
-    this.logger.info('Chat request', { sessionId: dto.sessionId });
-    await this.sessions.addMessage(dto.sessionId, 'user', dto.content);
+    // 3. Quick risk scan
+    const quickScan = this.riskDetector.quickScan(dto.content);
+    if (quickScan.flagged) {
+      this.logger.warn('Quick risk scan flagged', { sessionId: dto.sessionId, reason: quickScan.reason });
+    }
 
-    const systemPrompt = await this.buildSystemPrompt();
-    const session = await this.sessions.findOne(dto.sessionId);
-    const history = (session?.messages || [])
-      .slice(-20)
-      .map((m: any) => ({ role: m.role as 'user' | 'assistant', content: m.content }));
+    // 4. Build system prompt
+    const session = await this.prisma.therapySession.findUnique({
+      where: { id: dto.sessionId },
+      include: { therapist: { include: { approach: true } } },
+    });
+
+    if (!session) throw new Error('Session not found in DB');
+
+    const systemPrompt = await this.promptBuilder.buildSystemPrompt({
+      userId: session.userId,
+      therapistId: session.therapistId,
+      phaseContext: {
+        phase: sessionState.phase as any,
+        sessionNumber: session.sessionNumber,
+        agenda: sessionState.agenda,
+      },
+    });
+
+    // 5. Build message history
+    const recentMessages = await this.prisma.sessionMessage.findMany({
+      where: { sessionId: dto.sessionId },
+      orderBy: { createdAt: 'asc' },
+      take: 30,
+    });
 
     const messages = [
       { role: 'system' as const, content: systemPrompt },
-      ...history,
-      { role: 'user' as const, content: dto.content },
+      ...recentMessages.map((m) => ({
+        role: m.role as 'user' | 'assistant' | 'system',
+        content: m.content,
+      })),
     ];
 
-    const res = await this.llm.chat(messages, { temperature: 0.7, maxTokens: 1024 });
-    const message = await this.sessions.addMessage(dto.sessionId, 'assistant', res.content);
+    // 6. Stream LLM response
+    let fullContent = '';
+    let technique = '';
 
-    setImmediate(() => {
-      this.insight.processSession(dto.sessionId).catch((err) => {
-        this.logger.error('Insight processing failed', { sessionId: dto.sessionId, error: err });
+    try {
+      for await (const chunk of this.llm.stream(messages, { temperature: 0.7, maxTokens: 1024 })) {
+        fullContent += chunk.content;
+        yield { ...chunk, riskLevel: sessionState.riskLevel };
+      }
+
+      // Extract technique from content
+      const techMatch = fullContent.match(/【(.+?)】/);
+      if (techMatch) {
+        technique = techMatch[1];
+      }
+
+      // 7. Risk detection on full response (if not already flagged)
+      if (!quickScan.flagged) {
+        const riskResult = await this.riskDetector.detectRisk(dto.content + '\n' + fullContent);
+
+        if (riskResult.riskDetected && ['high', 'imminent'].includes(riskResult.riskLevel)) {
+          this.logger.warn('High risk detected', {
+            sessionId: dto.sessionId,
+            riskLevel: riskResult.riskLevel,
+            riskType: riskResult.riskType,
+          });
+
+          sessionState.riskLevel = riskResult.riskLevel;
+          await this.sessionManager.setRiskLevel(dto.sessionId, riskResult.riskLevel);
+
+          // Append crisis intervention if high risk
+          const crisisResponse = this.crisisService.getInterventionResponse(riskResult);
+          if (crisisResponse) {
+            yield { content: '\n\n---\n\n' + crisisResponse, done: false, riskLevel: riskResult.riskLevel };
+            fullContent += '\n\n---\n\n' + crisisResponse;
+          }
+        }
+      }
+
+      // 8. Save AI response
+      await this.prisma.sessionMessage.create({
+        data: {
+          sessionId: dto.sessionId,
+          role: 'therapist',
+          content: fullContent,
+          techniqueUsed: technique || null,
+          riskFlag: sessionState.riskLevel !== 'none',
+          latencyMs: Date.now() - startTime,
+        },
       });
-    });
 
-    this.logger.info('Chat completed', { sessionId: dto.sessionId, messageId: message.id });
-    return { message };
+      // 9. Update session state
+      const messageCount = await this.prisma.sessionMessage.count({
+        where: { sessionId: dto.sessionId },
+      });
+
+      // Simple auto-advance heuristic
+      const phaseThresholds: Record<string, number> = {
+        agenda_setting: 4,
+        mood_check: 8,
+        theme_work: 25,
+        summary: 999,
+      };
+
+      if (messageCount >= (phaseThresholds[sessionState.phase] || 999)) {
+        this.sessionManager.advancePhase(dto.sessionId);
+      }
+
+      await this.sessionManager.persistSession(dto.sessionId);
+
+      // 10. Log completion
+      this.logger.info('Therapy chat completed', {
+        sessionId: dto.sessionId,
+        phase: sessionState.phase,
+        technique,
+        riskLevel: sessionState.riskLevel,
+        latencyMs: Date.now() - startTime,
+      });
+
+      yield { content: '', done: true, riskLevel: sessionState.riskLevel, technique };
+    } catch (err) {
+      this.logger.error('Therapy chat failed', { sessionId: dto.sessionId, error: err });
+      throw err;
+    }
   }
 
-  private async buildSystemPrompt(): Promise<string> {
-    const userContext = await this.prisma.userContext.findUnique({
-      where: { userId: 'default' },
-    });
+  async chat(dto: TherapyChatDto) {
+    const chunks: string[] = [];
+    let riskLevel = 'none';
+    let technique = '';
 
-    const recentNotes = await this.prisma.memoryNote.findMany({
-      where: { active: true },
-      orderBy: { createdAt: 'desc' },
-      take: 10,
-    });
+    for await (const chunk of this.streamChat(dto)) {
+      if (!chunk.done) {
+        chunks.push(chunk.content);
+      }
+      riskLevel = chunk.riskLevel || riskLevel;
+      technique = chunk.technique || technique;
+    }
 
-    return buildGuidePrompt({
-      userProfile: userContext?.aiProfile,
-      recentNotes: recentNotes.length > 0
-        ? recentNotes.map((n) => `- [${n.type}] ${n.content}`)
-        : undefined,
-    });
+    return {
+      content: chunks.join(''),
+      riskLevel,
+      technique,
+    };
   }
 }

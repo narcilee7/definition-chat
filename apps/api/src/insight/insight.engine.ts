@@ -1,22 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { createLogger } from '@ohme/observability';
 import { PrismaService } from '../prisma/prisma.service';
-import {
-  sessionNotesPrompt,
-  MEMORY_EXTRACTION_SYSTEM,
-  memoryExtractionPrompt,
-  PROFILE_UPDATE_SYSTEM,
-  profileUpdatePrompt,
-} from '@ohme/prompts';
+import { SESSION_OUTCOME_PROMPT } from '@ohme/prompts';
 import { LLMFallbackService } from '../llm/llm-fallback.service';
-
-interface ExtractedNotes {
-  notes: Array<{
-    type: string;
-    content: string;
-    confidence: number;
-  }>;
-}
 
 @Injectable()
 export class InsightEngine {
@@ -28,14 +14,14 @@ export class InsightEngine {
   ) {}
 
   async processSession(sessionId: string) {
-    const session = await this.prisma.session.findUnique({
+    const session = await this.prisma.therapySession.findUnique({
       where: { id: sessionId },
       include: { messages: true },
     });
     if (!session || session.messages.length < 2) return;
 
     const transcript = session.messages
-      .map((m) => `${m.role === 'user' ? '用户' : '引导者'}：${m.content}`)
+      .map((m) => `${m.role === 'user' ? '来访者' : '咨询师'}：${m.content}`)
       .join('\n\n');
 
     this.logger.info('Processing session insight', { sessionId });
@@ -43,26 +29,13 @@ export class InsightEngine {
     try {
       // 1. Generate session notes
       const notes = await this.generateSessionNotes(transcript);
-      await this.prisma.session.update({
+      // Store notes as an insight (since TherapySession doesn't have a notes field)
+      await this.prisma.therapySession.update({
         where: { id: sessionId },
-        data: { notes },
+        data: {
+          insights: { push: notes } as any,
+        },
       });
-
-      // 2. Extract memory notes
-      const extracted = await this.extractMemoryNotes(transcript);
-      for (const note of extracted.notes) {
-        await this.prisma.memoryNote.create({
-          data: {
-            type: note.type,
-            content: note.content,
-            confidence: note.confidence,
-            sourceIds: JSON.stringify([sessionId]),
-          },
-        });
-      }
-
-      // 3. Update user context
-      await this.updateUserContext(transcript, notes);
 
       this.logger.info('Session insight completed', { sessionId, notesLength: notes.length });
     } catch (err) {
@@ -73,76 +46,11 @@ export class InsightEngine {
   private async generateSessionNotes(transcript: string): Promise<string> {
     const res = await this.llm.chat(
       [
-        { role: 'system', content: sessionNotesPrompt(transcript) },
+        { role: 'system', content: SESSION_OUTCOME_PROMPT },
         { role: 'user', content: transcript },
       ],
       { temperature: 0.5, maxTokens: 512 },
     );
     return res.content.trim();
-  }
-
-  private async extractMemoryNotes(transcript: string): Promise<ExtractedNotes> {
-    const res = await this.llm.chat(
-      [
-        { role: 'system', content: MEMORY_EXTRACTION_SYSTEM },
-        { role: 'user', content: memoryExtractionPrompt(transcript) },
-      ],
-      { temperature: 0.3, maxTokens: 1024 },
-    );
-
-    const cleaned = res.content
-      .replace(/```json\s*/gi, '')
-      .replace(/```\s*$/gi, '')
-      .trim();
-
-    try {
-      return JSON.parse(cleaned) as ExtractedNotes;
-    } catch {
-      return { notes: [] };
-    }
-  }
-
-  private async updateUserContext(transcript: string, notes: string) {
-    const existing = await this.prisma.userContext.findUnique({
-      where: { userId: 'default' },
-    });
-
-    const prompt = profileUpdatePrompt({
-      existingProfile: existing?.aiProfile,
-      recentNotes: notes,
-      transcript: existing ? undefined : transcript,
-    });
-
-    const res = await this.llm.chat(
-      [
-        { role: 'system', content: PROFILE_UPDATE_SYSTEM },
-        { role: 'user', content: prompt },
-      ],
-      { temperature: 0.5, maxTokens: 512 },
-    );
-
-    const allNotes = await this.prisma.memoryNote.findMany({
-      where: { active: true },
-      orderBy: { createdAt: 'desc' },
-      take: 30,
-    });
-
-    const keyTopics = [...new Set(allNotes.map((n) => n.type))].slice(0, 10);
-
-    await this.prisma.userContext.upsert({
-      where: { userId: 'default' },
-      update: {
-        aiProfile: res.content.trim(),
-        keyTopics: JSON.stringify(keyTopics),
-        updatedAt: new Date(),
-      },
-      create: {
-        userId: 'default',
-        aiProfile: res.content.trim(),
-        keyTopics: JSON.stringify(keyTopics),
-        sensitivities: JSON.stringify([]),
-        stylePrefs: JSON.stringify({}),
-      },
-    });
   }
 }

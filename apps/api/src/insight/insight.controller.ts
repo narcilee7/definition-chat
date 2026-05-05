@@ -5,18 +5,17 @@ import { PrismaService } from '../prisma/prisma.service';
 export class InsightController {
   constructor(private prisma: PrismaService) {}
 
-  @Get('memory-notes')
-  async findAllNotes() {
-    return this.prisma.memoryNote.findMany({
-      where: { active: true },
+  @Get('assessments')
+  async findAllAssessments() {
+    return this.prisma.assessment.findMany({
       orderBy: { createdAt: 'desc' },
     });
   }
 
-  @Get('user-context')
-  async findContext() {
-    return this.prisma.userContext.findUnique({
-      where: { userId: 'default' },
+  @Get('case-formulations')
+  async findAllFormulations() {
+    return this.prisma.caseFormulation.findMany({
+      orderBy: { version: 'desc' },
     });
   }
 }

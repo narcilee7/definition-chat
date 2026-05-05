@@ -10,19 +10,22 @@ export class AgentLoaderService implements OnModuleInit {
   constructor(private prisma: PrismaService) {}
 
   async onModuleInit() {
-    const agents = await this.prisma.agent.findMany();
-    const personas: AgentPersona[] = agents.map((a) => ({
-      id: a.id,
-      name: a.name,
-      description: a.description,
-      systemPrompt: a.systemPrompt,
-      color: a.color,
-      temperature: 0.7,
-      maxTokens: 512,
+    const personas = await this.prisma.therapistPersona.findMany({
+      include: { approach: true },
+    });
+
+    const agentPersonas: AgentPersona[] = personas.map((p) => ({
+      id: p.id,
+      name: p.name,
+      description: p.description,
+      systemPrompt: p.systemPrompt,
+      color: p.approach?.name === 'cbt' ? '#2563EB' : p.approach?.name === 'dbt' ? '#7C3AED' : p.approach?.name === 'act' ? '#059669' : '#4B5563',
+      temperature: p.temperature,
+      maxTokens: p.maxTokens,
       memory: { type: MemoryType.Buffer, maxMessages: 20 },
     }));
 
-    globalRegistry.registerMany(personas);
-    this.logger.info(`Loaded ${personas.length} agents into registry`);
+    globalRegistry.registerMany(agentPersonas);
+    this.logger.info(`Loaded ${agentPersonas.length} personas into registry`);
   }
 }

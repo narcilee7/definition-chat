@@ -3,81 +3,296 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
-model Agent {
-  id                 String   @id @default(cuid())
-  name               String   @unique
-  role               String
-  tone               String
-  color              String
-  description        String
-  coreTraits         String   @map("core_traits")
-  communicationStyle String   @map("communication_style")
-  expertise          String   @map("expertise")
-  backgroundStory    String?  @map("background_story")
-  openingStyle       String   @map("opening_style")
-  lengthPreference   String   @map("length_preference")
-  forbiddenTopics    String   @map("forbidden_topics")
-  systemPrompt       String   @map("system_prompt")
-  isBuiltIn          Boolean  @default(false) @map("is_built_in")
-  createdAt          DateTime @default(now()) @map("created_at")
-  updatedAt          DateTime @updatedAt @map("updated_at")
+// ============================================================
+// User Layer
+// ============================================================
 
-  @@map("agents")
+model User {
+  id            String    @id @default(cuid())
+  email         String?   @unique
+  phone         String?   @unique
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  // Privacy & Compliance
+  consentGiven  Boolean   @default(false) @map("consent_given")
+  consentAt     DateTime? @map("consent_at")
+  dataRetention DateTime? @map("data_retention")
+
+  profile       UserProfile?
+  sessions      TherapySession[]
+  assessments   Assessment[]
+  caseFormulations CaseFormulation[]
+  safetyPlan    SafetyPlan?
+  crisisLogs    CrisisLog[]
+
+  @@map("users")
 }
 
-model Session {
-  id        String    @id @default(cuid())
-  title     String?
-  intent    String?
-  mood      String?
-  notes     String?
-  createdAt DateTime  @default(now()) @map("created_at")
-  updatedAt DateTime  @updatedAt @map("updated_at")
+model UserProfile {
+  id              String  @id @default(cuid())
+  userId          String  @unique @map("user_id")
+  user            User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  messages Message[]
+  // Demographics
+  nickname        String?
+  ageRange        String? @map("age_range")
+  gender          String?
+  occupation      String?
+  relationshipStatus String? @map("relationship_status")
 
-  @@map("sessions")
+  // Therapy History
+  priorTherapy    Boolean @default(false) @map("prior_therapy")
+  priorDiagnosis  String? @map("prior_diagnosis")
+  medications     String?
+
+  // Preferences
+  preferredStyle  String? @map("preferred_style")
+  language        String  @default("zh")
+
+  @@map("user_profiles")
 }
 
-model Message {
-  id        String   @id @default(cuid())
-  role      String
-  content   String
-  sessionId String   @map("session_id")
-  createdAt DateTime @default(now()) @map("created_at")
+// ============================================================
+// Therapy Layer
+// ============================================================
 
-  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+model TherapyApproach {
+  id              String  @id @default(cuid())
+  name            String  @unique
+  displayName     String  @map("display_name")
+  description     String
+  isBuiltIn       Boolean @default(true) @map("is_built_in")
 
-  @@map("messages")
+  // Core Configuration
+  sessionStructure Json   @map("session_structure")
+  interventionLibrary Json @map("intervention_library")
+  assessmentTools  String[] @map("assessment_tools")
+
+  // System Prompt Template
+  systemPromptTemplate String @map("system_prompt_template")
+
+  // Community
+  createdBy       String? @map("created_by")
+  isPublic        Boolean @default(false) @map("is_public")
+
+  personas        TherapistPersona[]
+
+  @@map("therapy_approaches")
 }
 
-model MemoryNote {
-  id          String   @id @default(cuid())
-  type        String
-  content     String
-  confidence  Float    @default(0.5)
-  active      Boolean  @default(true)
-  sourceIds   String
-  linkedTo    String?
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+model TherapistPersona {
+  id              String  @id @default(cuid())
+  name            String
+  description     String
 
-  @@map("memory_notes")
+  // Approach
+  approachId      String  @map("approach_id")
+  approach        TherapyApproach @relation(fields: [approachId], references: [id])
+
+  // Configuration
+  systemPrompt    String  @map("system_prompt")
+  temperature     Float   @default(0.7)
+  maxTokens       Int     @default(1024) @map("max_tokens")
+
+  // Style Parameters
+  styleTraits     Json    @map("style_traits")
+  voiceTone       String  @map("voice_tone")
+
+  // Specialties
+  specialties     String[]
+
+  // Boundaries
+  boundaries      String[]
+
+  // Creation
+  isBuiltIn       Boolean @default(true) @map("is_built_in")
+  createdBy       String? @map("created_by")
+  isPublic        Boolean @default(true) @map("is_public")
+
+  sessions        TherapySession[]
+
+  @@map("therapist_personas")
 }
 
-model UserContext {
-  id            String   @id @default(cuid())
-  userId        String   @unique
-  aiProfile     String   @map("ai_profile")
-  keyTopics     String   @map("key_topics")
-  sensitivities String?  @map("sensitivities")
-  stylePrefs    String?  @map("style_prefs")
-  updatedAt     DateTime @updatedAt @map("updated_at")
-  createdAt     DateTime @default(now()) @map("created_at")
+model CaseFormulation {
+  id              String  @id @default(cuid())
+  userId          String  @map("user_id")
+  user            User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@map("user_contexts")
+  // Presenting Problems
+  presentingProblems String @map("presenting_problems")
+
+  // Five-Factor Model
+  triggers        String?
+  thoughts        String?
+  emotions        String?
+  behaviors       String?
+  physical        String?
+
+  // Deep Structure
+  coreBeliefs     String[] @map("core_beliefs")
+  intermediateBeliefs String[] @map("intermediate_beliefs")
+  copingStrategies String[] @map("coping_strategies")
+
+  // Developmental
+  formativeEvents String? @map("formative_events")
+
+  // Treatment Plan
+  treatmentGoals  Json[]   @map("treatment_goals")
+
+  // Dynamic
+  confidence      Float    @default(0.5)
+  version         Int      @default(1)
+  previousVersion String?  @map("previous_version")
+
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("case_formulations")
+}
+
+model TherapySession {
+  id              String  @id @default(cuid())
+  userId          String  @map("user_id")
+  user            User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  therapistId     String  @map("therapist_id")
+  therapist       TherapistPersona @relation(fields: [therapistId], references: [id])
+
+  // Session Structure
+  sessionNumber   Int     @map("session_number")
+  phase           String  // intake, active, maintenance, termination
+
+  // Agenda
+  agenda          Json[]
+
+  // Mood Check
+  preMood         Json?   @map("pre_mood")
+  postMood        Json?   @map("post_mood")
+
+  // Risk
+  riskScreening   Json?   @map("risk_screening")
+  riskLevel       String  @default("none") @map("risk_level")
+
+  // Content
+  messages        SessionMessage[]
+
+  // Outcomes
+  insights        String[]
+  homework        Json[]
+  skillsIntroduced String[] @map("skills_introduced")
+
+  // Alliance
+  allianceRating  Int?     @map("alliance_rating")
+
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("therapy_sessions")
+}
+
+model SessionMessage {
+  id              String  @id @default(cuid())
+  sessionId       String  @map("session_id")
+  session         TherapySession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  role            String  // user, therapist, system, tool
+  content         String
+
+  // Structured Annotation
+  interventionType String? @map("intervention_type")
+  techniqueUsed    String? @map("technique_used")
+  riskFlag         Boolean @default(false) @map("risk_flag")
+
+  // Metadata
+  latencyMs       Int?    @map("latency_ms")
+  tokenCount      Int?    @map("token_count")
+
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@map("session_messages")
+}
+
+// ============================================================
+// Assessment Layer
+// ============================================================
+
+model Assessment {
+  id              String  @id @default(cuid())
+  userId          String  @map("user_id")
+  user            User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type            String  // PHQ-9, GAD-7, PSS, WHODAS
+  name            String
+  description     String?
+
+  // Scale Data
+  responses       Json[]
+  totalScore      Int     @map("total_score")
+  severity        String? // mild, moderate, severe
+
+  // Clinical Significance
+  clinicalCutoff  Boolean @default(false) @map("clinical_cutoff")
+  riskFlags       String[] @map("risk_flags")
+
+  // Tracking
+  sessionId       String? @map("session_id")
+  isBaseline      Boolean @default(false) @map("is_baseline")
+
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@map("assessments")
+}
+
+// ============================================================
+// Safety Layer
+// ============================================================
+
+model SafetyPlan {
+  id              String  @id @default(cuid())
+  userId          String  @unique @map("user_id")
+  user            User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Five Steps (Standard CBT Safety Plan)
+  warningSigns    String[] @map("warning_signs")
+  copingStrategies String[] @map("coping_strategies")
+  distractions    String[]
+  supportPeople   Json[]   @map("support_people")
+  professionals   Json[]
+  environmentSafety String? @map("environment_safety")
+
+  isActive        Boolean  @default(true) @map("is_active")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("safety_plans")
+}
+
+model CrisisLog {
+  id              String  @id @default(cuid())
+  userId          String  @map("user_id")
+  user            User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Risk Level
+  riskLevel       String  @map("risk_level")
+  detectedAt      DateTime @default(now()) @map("detected_at")
+
+  // Trigger
+  triggerMessage  String? @map("trigger_message")
+  triggerType     String? @map("trigger_type")
+
+  // Intervention
+  aiResponse      String? @map("ai_response")
+  userFollowUp    String? @map("user_follow_up")
+  escalated       Boolean @default(false)
+  resolvedAt      DateTime? @map("resolved_at")
+
+  // Context
+  sessionId       String? @map("session_id")
+
+  @@map("crisis_logs")
 }
