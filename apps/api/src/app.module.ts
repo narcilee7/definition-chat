@@ -9,6 +9,7 @@ import { ChatModule } from './chat/chat.module';
 import { SessionsModule } from './sessions/sessions.module';
 import { BuilderModule } from './builder/builder.module';
 import { InsightModule } from './insight/insight.module';
+import { AssessmentModule } from './assessment/assessment.module';
 import { AgentsModule } from './agents/agents.module';
 import { AgentLoaderService } from './agent-loader.service';
 
@@ -25,6 +26,7 @@ import { AgentLoaderService } from './agent-loader.service';
     ChatModule,
     BuilderModule,
     InsightModule,
+    AssessmentModule,
   ],
   providers: [AgentLoaderService],
 })

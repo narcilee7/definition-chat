@@ -6,7 +6,7 @@ import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ModeToggle } from "@/components/mode-toggle";
-import { Sparkles, MessageCircle, Wand2, Loader2 } from "lucide-react";
+import { Sparkles, MessageCircle, Wand2, Loader2, ClipboardCheck, Shield, BarChart3, Split } from "lucide-react";
 
 interface Persona {
   id: string;
@@ -125,6 +125,26 @@ export default function HomePage() {
               </CardContent>
             </Card>
           ))}
+        </div>
+
+        {/* Quick Actions */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
+          <Button variant="outline" onClick={() => router.push("/assess")} className="h-auto py-3 flex-col gap-1">
+            <ClipboardCheck className="h-4 w-4" />
+            <span className="text-xs">量表评估</span>
+          </Button>
+          <Button variant="outline" onClick={() => router.push("/reflect")} className="h-auto py-3 flex-col gap-1">
+            <Split className="h-4 w-4" />
+            <span className="text-xs">流派折射</span>
+          </Button>
+          <Button variant="outline" onClick={() => router.push("/progress")} className="h-auto py-3 flex-col gap-1">
+            <BarChart3 className="h-4 w-4" />
+            <span className="text-xs">进度追踪</span>
+          </Button>
+          <Button variant="outline" onClick={() => router.push("/safety")} className="h-auto py-3 flex-col gap-1">
+            <Shield className="h-4 w-4" />
+            <span className="text-xs">安全中心</span>
+          </Button>
         </div>
 
         {/* Start Button */}

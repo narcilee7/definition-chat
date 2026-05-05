@@ -44,6 +44,10 @@ export const api = {
 
   assessments: {
     list: () => fetchJson<any[]>("/api/assessments"),
+    questions: (type: string) => fetchJson<any>(`/api/assessments/questions/${type}`),
+    submit: (data: any) => fetchJson<any>("/api/assessments", { method: "POST", body: JSON.stringify(data) }),
+    trend: (type: string, userId?: string) => fetchJson<any>(`/api/assessments/trend?type=${type}&userId=${userId || "default"}`),
+    latest: (type: string, userId?: string) => fetchJson<any>(`/api/assessments/${type}/latest?userId=${userId || "default"}`),
   },
 
   builder: {
