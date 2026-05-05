@@ -16,28 +16,49 @@ export const api = {
   sessions: {
     list: () => fetchJson<any[]>("/api/sessions"),
     get: (id: string) => fetchJson<any>(`/api/sessions/${id}`),
-    create: (data?: { title?: string; intent?: string; mood?: string }) =>
-      fetchJson<any>("/api/sessions", { method: "POST", body: JSON.stringify(data || {}) }),
+    addMessage: (id: string, data: { role: string; content: string }) =>
+      fetchJson<any>(`/api/sessions/${id}/messages`, { method: "POST", body: JSON.stringify(data) }),
   },
 
-  chat: {
+  therapy: {
+    createSession: (data: { userId: string; therapistId: string; presentingProblem?: string }) =>
+      fetchJson<any>("/api/therapy/sessions", { method: "POST", body: JSON.stringify(data) }),
+    getSession: (id: string) => fetchJson<any>(`/api/therapy/sessions/${id}`),
+    chat: (data: { sessionId: string; content: string }) =>
+      fetchJson<any>("/api/therapy/chat", { method: "POST", body: JSON.stringify(data) }),
     stream: (data: { sessionId: string; content: string }) => {
-      return fetch(`${API_BASE}/api/chat/stream`, {
+      return fetch(`${API_BASE}/api/therapy/chat/stream`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
     },
+    setPhase: (id: string, phase: string) =>
+      fetchJson<any>(`/api/therapy/sessions/${id}/phase`, { method: "POST", body: JSON.stringify({ phase }) }),
   },
 
-  memory: {
-    list: () => fetchJson<any[]>("/api/memory-notes"),
+  personas: {
+    list: () => fetchJson<any[]>("/api/agents"),
+    get: (id: string) => fetchJson<any>(`/api/agents/${id}`),
   },
 
-  context: {
-    get: () => fetchJson<any>("/api/user-context"),
+  assessments: {
+    list: () => fetchJson<any[]>("/api/assessments"),
+    questions: (type: string) => fetchJson<any>(`/api/assessments/questions/${type}`),
+    submit: (data: any) => fetchJson<any>("/api/assessments", { method: "POST", body: JSON.stringify(data) }),
+    trend: (type: string, userId?: string) => fetchJson<any>(`/api/assessments/trend?type=${type}&userId=${userId || "default"}`),
+    latest: (type: string, userId?: string) => fetchJson<any>(`/api/assessments/${type}/latest?userId=${userId || "default"}`),
   },
 
+  safety: {
+    get: (userId: string) => fetchJson<any>(`/api/safety-plans/${userId}`),
+    save: (userId: string, data: any) =>
+      fetchJson<any>(`/api/safety-plans/${userId}`, { method: "POST", body: JSON.stringify(data) }),
+  },
+  refraction: {
+    analyze: (data: { userId: string; question: string; approachIds: string[] }) =>
+      fetchJson<any>("/api/refraction", { method: "POST", body: JSON.stringify(data) }),
+  },
   builder: {
     chat: (data: { sessionId: string; content: string }) =>
       fetchJson<any>("/api/builder/chat", { method: "POST", body: JSON.stringify(data) }),

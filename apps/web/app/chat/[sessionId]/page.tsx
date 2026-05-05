@@ -1,34 +1,53 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { MarkdownRenderer } from "@/components/markdown-renderer";
-import { useStreamChat } from "@/hooks/use-stream-chat";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ModeToggle } from "@/components/mode-toggle";
-import { Send, Loader2, ArrowLeft, Square, Sparkles } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Send, Loader2, ArrowLeft, Square, Sparkles, ShieldAlert } from "lucide-react";
+
+const PHASE_LABELS: Record<string, string> = {
+  agenda_setting: "议程设置",
+  mood_check: "情绪检查",
+  theme_work: "主题工作",
+  summary: "总结收束",
+};
+
+const PHASE_COLORS: Record<string, string> = {
+  agenda_setting: "bg-blue-500",
+  mood_check: "bg-yellow-500",
+  theme_work: "bg-green-500",
+  summary: "bg-purple-500",
+};
+
+interface ChatMessage {
+  id: string;
+  role: string;
+  content: string;
+  techniqueUsed?: string;
+  riskFlag?: boolean;
+  createdAt: string;
+}
 
 export default function ChatPage() {
   const params = useParams();
   const router = useRouter();
-  const searchParams = useSearchParams();
   const sessionId = params.sessionId as string;
-  const initialMsg = searchParams.get("initialMsg");
 
   const [session, setSession] = useState<any>(null);
   const [isInitLoading, setIsInitLoading] = useState(true);
   const [input, setInput] = useState("");
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [currentPhase, setCurrentPhase] = useState("agenda_setting");
+  const [riskLevel, setRiskLevel] = useState("none");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const initialSent = useRef(false);
-
-  const { messages, sendMessage, isLoading, stop, initMessages } = useStreamChat({
-    sessionId,
-    onError: (err) => console.error(err),
-  });
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -39,7 +58,6 @@ export default function ChatPage() {
   }, [messages, isLoading, scrollToBottom]);
 
   useEffect(() => {
-    if (sessionId === "new") return;
     loadSession();
   }, [sessionId]);
 
@@ -50,27 +68,15 @@ export default function ChatPage() {
     }
   }, [input]);
 
-  // Send initial message if provided via URL
-  useEffect(() => {
-    if (initialMsg && !initialSent.current && !isInitLoading && session) {
-      initialSent.current = true;
-      sendMessage(initialMsg);
-      // Clean URL
-      router.replace(`/chat/${sessionId}`, { scroll: false });
-    }
-  }, [initialMsg, isInitLoading, session, sessionId, sendMessage, router]);
-
   const loadSession = async () => {
     try {
-      const sessionData = await api.sessions.get(sessionId);
+      const sessionData = await api.therapy.getSession(sessionId);
       setSession(sessionData);
-      const existingMessages = (sessionData.messages || []).map((m: any) => ({
-        id: m.id,
-        role: m.role === "user" ? ("user" as const) : ("assistant" as const),
-        content: m.content,
-        createdAt: m.createdAt,
-      }));
-      initMessages(existingMessages);
+      setCurrentPhase(sessionData.phase || "agenda_setting");
+      setRiskLevel(sessionData.riskLevel || "none");
+      if (sessionData.messages) {
+        setMessages(sessionData.messages);
+      }
     } catch (err) {
       console.error(err);
     } finally {
@@ -79,16 +85,117 @@ export default function ChatPage() {
   };
 
   const handleSend = async () => {
-    if (!input.trim() || isLoading || !session) return;
+    if (!input.trim() || isLoading) return;
     const content = input.trim();
     setInput("");
-    await sendMessage(content);
+
+    // Optimistically add user message
+    const userMsg: ChatMessage = {
+      id: `user-${Date.now()}`,
+      role: "user",
+      content,
+      createdAt: new Date().toISOString(),
+    };
+    setMessages((prev) => [...prev, userMsg]);
+    setIsLoading(true);
+
+    const agentMsgId = `agent-${Date.now()}`;
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: agentMsgId,
+        role: "therapist",
+        content: "",
+        createdAt: new Date().toISOString(),
+      },
+    ]);
+
+    try {
+      const res = await api.therapy.stream({ sessionId, content });
+      const reader = res.body!.getReader();
+      const decoder = new TextDecoder("utf-8");
+      let buffer = "";
+      let fullContent = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith("data: ")) continue;
+
+          const data = trimmed.slice(6).trim();
+          if (data === "[DONE]") continue;
+
+          try {
+            const parsed = JSON.parse(data);
+            if (parsed.error) throw new Error(parsed.error);
+            if (parsed.done) {
+              if (parsed.riskLevel) setRiskLevel(parsed.riskLevel);
+              if (parsed.technique) {
+                setMessages((prev) =>
+                  prev.map((msg) =>
+                    msg.id === agentMsgId
+                      ? { ...msg, techniqueUsed: parsed.technique }
+                      : msg
+                  )
+                );
+              }
+              continue;
+            }
+            const chunk = parsed.content || "";
+            fullContent += chunk;
+
+            setMessages((prev) =>
+              prev.map((msg) =>
+                msg.id === agentMsgId ? { ...msg, content: fullContent } : msg
+              )
+            );
+
+            if (parsed.riskLevel) setRiskLevel(parsed.riskLevel);
+          } catch {
+            // ignore parse errors
+          }
+        }
+      }
+
+      // Reload session state
+      setTimeout(loadSession, 500);
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : "发送失败";
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === agentMsgId
+            ? { ...msg, content: `❌ ${errorMsg}` }
+            : msg
+        )
+      );
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSend();
+    }
+  };
+
+  const getRiskColor = () => {
+    switch (riskLevel) {
+      case "high":
+      case "imminent":
+        return "text-red-500";
+      case "moderate":
+        return "text-orange-500";
+      default:
+        return "text-muted-foreground";
     }
   };
 
@@ -112,26 +219,48 @@ export default function ChatPage() {
     <div className="min-h-screen flex flex-col bg-background">
       {/* Header */}
       <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur">
-        <div className="max-w-2xl mx-auto flex h-14 items-center justify-between px-4">
+        <div className="max-w-4xl mx-auto flex h-14 items-center justify-between px-4">
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="icon" onClick={() => router.push("/")}>
               <ArrowLeft className="h-4 w-4" />
             </Button>
             <div className="flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-primary" />
-              <span className="text-sm font-medium">OhMe</span>
+              <span className="text-sm font-medium">
+                {session.therapist?.name || "OhMe"}
+              </span>
             </div>
           </div>
-          <ModeToggle />
+          <div className="flex items-center gap-3">
+            {/* Phase Indicator */}
+            <div className="flex items-center gap-2">
+              <div className={`w-2 h-2 rounded-full ${PHASE_COLORS[currentPhase] || "bg-gray-400"}`} />
+              <span className="text-xs text-muted-foreground">
+                {PHASE_LABELS[currentPhase] || currentPhase}
+              </span>
+            </div>
+            {/* Risk Indicator */}
+            {riskLevel !== "none" && (
+              <ShieldAlert className={`h-4 w-4 ${getRiskColor()}`} />
+            )}
+            <ModeToggle />
+          </div>
         </div>
       </header>
 
       {/* Messages */}
       <ScrollArea className="flex-1">
-        <div className="max-w-2xl mx-auto px-4 py-6 space-y-6">
+        <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
+          {/* Session Info */}
+          <div className="text-center pb-4 border-b">
+            <p className="text-xs text-muted-foreground">
+              第 {session.sessionNumber} 次会话 · {session.therapist?.approach?.displayName}
+            </p>
+          </div>
+
           {messages.length === 0 && (
             <div className="text-center py-20">
-              <p className="text-muted-foreground">开始你的探索</p>
+              <p className="text-muted-foreground">开始你的治疗旅程</p>
             </div>
           )}
 
@@ -154,8 +283,10 @@ export default function ChatPage() {
                   ) : (
                     <div className="leading-relaxed">
                       <MarkdownRenderer content={msg.content} />
-                      {msg.isStreaming && (
-                        <span className="inline-block w-1.5 h-4 ml-0.5 bg-primary/60 animate-pulse align-middle rounded-sm" />
+                      {msg.techniqueUsed && (
+                        <Badge variant="secondary" className="mt-2 text-[10px]">
+                          {msg.techniqueUsed}
+                        </Badge>
                       )}
                     </div>
                   )}
@@ -164,7 +295,7 @@ export default function ChatPage() {
             );
           })}
 
-          {isLoading && messages[messages.length - 1]?.role !== "assistant" && (
+          {isLoading && messages[messages.length - 1]?.role !== "therapist" && (
             <div className="flex justify-start">
               <div className="bg-muted rounded-2xl px-4 py-3">
                 <div className="flex gap-1">
@@ -180,22 +311,35 @@ export default function ChatPage() {
         </div>
       </ScrollArea>
 
+      {/* Risk Warning */}
+      {riskLevel !== "none" && (
+        <div className="border-t bg-red-50 dark:bg-red-950/20 px-4 py-2">
+          <div className="max-w-4xl mx-auto flex items-center gap-2 text-xs text-red-600">
+            <ShieldAlert className="h-4 w-4 flex-shrink-0" />
+            <span>
+              检测到风险信号（{riskLevel === "high" ? "高" : riskLevel === "imminent" ? "紧急" : "中"}风险）。
+              如需帮助，请联系 24 小时热线：400-161-9995
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* Input */}
       <div className="border-t bg-background">
-        <div className="max-w-2xl mx-auto px-4 py-4">
+        <div className="max-w-4xl mx-auto px-4 py-4">
           <div className="flex gap-3 items-end">
             <Textarea
               ref={textareaRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="继续说..."
+              placeholder="继续对话..."
               rows={1}
               disabled={isLoading}
               className="min-h-[44px] resize-none rounded-xl"
             />
             <Button
-              onClick={isLoading ? stop : handleSend}
+              onClick={isLoading ? undefined : handleSend}
               disabled={!isLoading && !input.trim()}
               size="icon"
               className="h-10 w-10 rounded-xl flex-shrink-0"
@@ -208,7 +352,7 @@ export default function ChatPage() {
             </Button>
           </div>
           <p className="text-[10px] text-muted-foreground mt-2 text-center">
-            {isLoading ? "点击方块停止生成" : "Enter 发送 · Shift + Enter 换行"}
+            {isLoading ? "生成中..." : "Enter 发送 · Shift + Enter 换行"}
           </p>
         </div>
       </div>

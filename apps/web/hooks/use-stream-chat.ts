@@ -5,10 +5,11 @@ import { api } from "@/lib/api";
 
 export interface ChatMessage {
   id: string;
-  role: "user" | "assistant";
+  role: "user" | "therapist";
   content: string;
   isStreaming?: boolean;
   createdAt?: string;
+  techniqueUsed?: string;
 }
 
 interface UseStreamChatOptions {
@@ -43,7 +44,7 @@ export function useStreamChat({ sessionId, onError }: UseStreamChatOptions) {
         ...prev,
         {
           id: agentMsgId,
-          role: "assistant",
+          role: "therapist",
           content: "",
           isStreaming: true,
         },
@@ -53,7 +54,7 @@ export function useStreamChat({ sessionId, onError }: UseStreamChatOptions) {
         const abort = new AbortController();
         abortRef.current = abort;
 
-        const res = await api.chat.stream({
+        const res = await api.therapy.stream({
           sessionId,
           content: content.trim(),
         });
@@ -90,6 +91,21 @@ export function useStreamChat({ sessionId, onError }: UseStreamChatOptions) {
             try {
               const parsed = JSON.parse(data);
               if (parsed.error) throw new Error(parsed.error);
+              if (parsed.done) {
+                setMessages((prev) =>
+                  prev.map((msg) =>
+                    msg.id === agentMsgId
+                      ? {
+                          ...msg,
+                          content: fullContent,
+                          isStreaming: false,
+                          techniqueUsed: parsed.technique,
+                        }
+                      : msg
+                  )
+                );
+                continue;
+              }
               const chunk = parsed.content || "";
               fullContent += chunk;
 
