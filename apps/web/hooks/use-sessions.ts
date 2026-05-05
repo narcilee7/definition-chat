@@ -11,10 +11,10 @@ export interface Session {
   updatedAt: string;
 }
 
-export function useSessions() {
+export function useSessions(userId?: string) {
   return useQuery<Session[]>({
-    queryKey: ["sessions"],
-    queryFn: api.sessions.list,
+    queryKey: ["sessions", userId],
+    queryFn: () => api.sessions.list(userId),
   });
 }
 

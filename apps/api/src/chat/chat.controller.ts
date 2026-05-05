@@ -16,7 +16,11 @@ export class ChatController {
 
   @Post('sessions')
   async createSession(@Body() dto: CreateTherapySessionDto) {
-    const state = await this.sessionManager.createSession(dto.userId, dto.therapistId);
+    const state = await this.sessionManager.createSession(
+      dto.userId,
+      dto.therapistId,
+      dto.presentingProblem,
+    );
     return { sessionId: state.sessionId, phase: state.phase };
   }
 

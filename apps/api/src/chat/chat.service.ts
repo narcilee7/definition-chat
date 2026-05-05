@@ -56,12 +56,19 @@ export class ChatService {
 
     const systemPrompt = await this.promptBuilder.buildSystemPrompt({
       userId: session.userId,
-      therapistId: session.therapistId,
-      phaseContext: {
-        phase: sessionState.phase as any,
-        sessionNumber: session.sessionNumber,
-        agenda: sessionState.agenda,
-      },
+      sessionId: dto.sessionId,
+      sessionNumber: session.sessionNumber,
+      phase: sessionState.phase,
+      presentingProblem: session.presentingProblem || undefined,
+      agenda: sessionState.agenda.map((a) => ({
+        topic: a.topic,
+        priority: a.priority,
+        status: a.status,
+      })),
+      homeworkReview: sessionState.homework,
+      previousSessionSummary: undefined, // TODO: 从上次会话生成摘要
+      insights: sessionState.insights,
+      skillsIntroduced: sessionState.skillsIntroduced,
     });
 
     // 5. Build message history

@@ -172,6 +172,7 @@ model TherapySession {
   // Session Structure
   sessionNumber   Int     @map("session_number")
   phase           String  // intake, active, maintenance, termination
+  presentingProblem String? @map("presenting_problem")
 
   // Agenda
   agenda          Json[]

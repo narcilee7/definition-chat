@@ -21,7 +21,7 @@ export class SessionManagerService {
 
   constructor(private prisma: PrismaService) {}
 
-  async createSession(userId: string, therapistId: string): Promise<SessionState> {
+  async createSession(userId: string, therapistId: string, presentingProblem?: string): Promise<SessionState> {
     // Count existing sessions for this user + therapist
     const existingCount = await this.prisma.therapySession.count({
       where: { userId, therapistId },
@@ -33,6 +33,7 @@ export class SessionManagerService {
         therapistId,
         sessionNumber: existingCount + 1,
         phase: 'active',
+        presentingProblem,
         agenda: [],
         riskLevel: 'none',
         insights: [],

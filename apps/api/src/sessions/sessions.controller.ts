@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Query } from '@nestjs/common';
 import { SessionsService } from './sessions.service';
 
 @Controller('sessions')
@@ -6,8 +6,8 @@ export class SessionsController {
   constructor(private readonly sessionsService: SessionsService) {}
 
   @Get()
-  async findAll() {
-    return this.sessionsService.findAll();
+  async findAll(@Query('userId') userId?: string) {
+    return this.sessionsService.findAll(userId);
   }
 
   @Get(':id')

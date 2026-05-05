@@ -6,10 +6,12 @@ import { PrismaService } from '../prisma/prisma.service';
 export class SessionsService {
   constructor(private prisma: PrismaService) {}
 
-  async findAll() {
+  async findAll(userId?: string) {
+    const where = userId ? { userId } : {};
     return this.prisma.therapySession.findMany({
+      where,
       orderBy: { updatedAt: 'desc' },
-      include: { therapist: { include: { approach: true } }, messages: { orderBy: { createdAt: 'asc' } } },
+      include: { therapist: { select: { id: true, name: true } } },
     });
   }
 

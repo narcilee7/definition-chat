@@ -14,7 +14,7 @@ async function fetchJson<T>(path: string, options?: RequestInit): Promise<T> {
 
 export const api = {
   sessions: {
-    list: () => fetchJson<any[]>("/api/sessions"),
+    list: (userId?: string) => fetchJson<any[]>(`/api/sessions${userId ? `?userId=${userId}` : ""}`),
     get: (id: string) => fetchJson<any>(`/api/sessions/${id}`),
     addMessage: (id: string, data: { role: string; content: string }) =>
       fetchJson<any>(`/api/sessions/${id}/messages`, { method: "POST", body: JSON.stringify(data) }),

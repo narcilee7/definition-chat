@@ -4,8 +4,8 @@ import { QueryProvider } from "@/components/providers/query-provider";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "OhMe — 多视角自我探索",
-  description: "借用不同 Lens 重新解释自己和世界。",
+  title: "OhMe — 结构化 AI 心理咨询",
+  description: "和一个理解你、能帮你好一点的人聊聊。",
 };
 
 export default function RootLayout({
