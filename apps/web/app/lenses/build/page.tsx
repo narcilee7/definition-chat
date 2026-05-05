@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,6 +29,26 @@ export default function BuildLensPage() {
   const [explorationMoves, setExplorationMoves] = useState("把责任分成我的、对方的、环境的三栏。\n写下一句更清楚但不攻击人的需求表达。");
   const [risks, setRisks] = useState("可能把所有关系问题都解释成边界问题。\n可能忽略亲密关系里必要的互相照顾。");
   const [savedId, setSavedId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const forkParam = new URLSearchParams(window.location.search).get("fork");
+    if (!forkParam) return;
+
+    try {
+      const lens = JSON.parse(decodeURIComponent(forkParam));
+      setName(lens.name || "");
+      setShortDescription(lens.shortDescription || "");
+      setDomains(Array.isArray(lens.domains) ? lens.domains.join("\n") : "");
+      setSees(Array.isArray(lens.sees) ? lens.sees.join("\n") : "");
+      setIgnores(Array.isArray(lens.ignores) ? lens.ignores.join("\n") : "");
+      setExplainsPainAs(lens.explainsPainAs || "");
+      setCoreQuestions(Array.isArray(lens.coreQuestions) ? lens.coreQuestions.join("\n") : "");
+      setExplorationMoves(Array.isArray(lens.explorationMoves) ? lens.explorationMoves.join("\n") : "");
+      setRisks(Array.isArray(lens.risks) ? lens.risks.join("\n") : "");
+    } catch {
+      // Ignore invalid fork payloads.
+    }
+  }, []);
 
   const canSave = name.trim() && shortDescription.trim() && splitLines(sees).length > 0 && explainsPainAs.trim();
 

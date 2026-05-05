@@ -58,6 +58,10 @@ export default function HomePage() {
               <NotebookText className="mr-1 h-4 w-4" />
               Self Model
             </Button>
+            <Button variant="ghost" size="sm" onClick={() => router.push("/lenses")}>
+              <Library className="mr-1 h-4 w-4" />
+              Lens 库
+            </Button>
             <Button variant="ghost" size="sm" onClick={() => router.push("/lenses/build")}>
               <Wand2 className="mr-1 h-4 w-4" />
               Build Lens

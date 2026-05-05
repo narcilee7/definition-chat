@@ -116,6 +116,20 @@ export function saveCustomLens(input: CustomLensInput): LensOption {
   return nextLens;
 }
 
+export function forkLens(lens: LensOption): LensOption {
+  return saveCustomLens({
+    name: `${lens.name.replace(/\s*Lens$/, "")} Fork Lens`,
+    shortDescription: lens.shortDescription,
+    domains: lens.domains,
+    sees: lens.sees,
+    ignores: lens.ignores || [],
+    explainsPainAs: lens.explainsPainAs || lens.shortDescription,
+    coreQuestions: lens.coreQuestions || [],
+    explorationMoves: lens.explorationMoves || [],
+    risks: lens.risks || [],
+  });
+}
+
 export function deleteCustomLens(id: string): void {
   const lenses = readCustomLenses().filter((lens) => lens.id !== id);
   window.localStorage.setItem(CUSTOM_LENSES_KEY, JSON.stringify(lenses));
@@ -139,4 +153,20 @@ export function getCustomLensPayload(ids: string[]) {
       explorationMoves: lens.explorationMoves || [],
       risks: lens.risks || [],
     }));
+}
+
+export function encodeLensFork(lens: LensOption): string {
+  return encodeURIComponent(
+    JSON.stringify({
+      name: `${lens.name.replace(/\s*Lens$/, "")} Fork Lens`,
+      shortDescription: lens.shortDescription,
+      domains: lens.domains,
+      sees: lens.sees,
+      ignores: lens.ignores || [],
+      explainsPainAs: lens.explainsPainAs || lens.shortDescription,
+      coreQuestions: lens.coreQuestions || [],
+      explorationMoves: lens.explorationMoves || [],
+      risks: lens.risks || [],
+    }),
+  );
 }
