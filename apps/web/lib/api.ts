@@ -56,7 +56,7 @@ export const api = {
       fetchJson<any>(`/api/safety-plans/${userId}`, { method: "POST", body: JSON.stringify(data) }),
   },
   refraction: {
-    analyze: (data: { userId: string; question: string; approachIds: string[] }) =>
+    analyze: (data: { userId: string; question: string; lensIds?: string[]; approachIds?: string[] }) =>
       fetchJson<any>("/api/refraction", { method: "POST", body: JSON.stringify(data) }),
   },
   builder: {

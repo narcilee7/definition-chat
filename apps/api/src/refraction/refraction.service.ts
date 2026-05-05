@@ -1,20 +1,99 @@
 import { Injectable } from '@nestjs/common';
 import { createLogger } from '@ohme/observability';
-import { PrismaService } from '../prisma/prisma.service';
 import { LLMFallbackService } from '../llm/llm-fallback.service';
-import { compileSystemPrompt } from '@ohme/prompts';
+
+interface LensDefinition {
+  id: string;
+  name: string;
+  shortDescription: string;
+  sees: string[];
+  ignores: string[];
+  explainsPainAs: string;
+  coreQuestions: string[];
+  explorationMoves: string[];
+  risks: string[];
+}
+
+const LENSES: LensDefinition[] = [
+  {
+    id: 'cognitive-judgment',
+    name: '认知判断 Lens',
+    shortDescription: '检查看似确定的判断，哪些其实只是未经验证的解释。',
+    sees: ['自动判断', '证据不足', '灾难化', '全或无思维', '情绪推理'],
+    ignores: ['历史创伤', '关系权力', '身体疲惫', '社会结构压力'],
+    explainsPainAs: '痛苦可能来自某些未经检验的判断被当成事实。',
+    coreQuestions: ['这个判断有什么证据？', '有没有同样合理的另一种解释？', '如果这是朋友的处境，你会如何理解？'],
+    explorationMoves: ['把一个绝对化判断改写成可检验假设。', '列出支持和不支持这个判断的证据。'],
+    risks: ['可能把真实处境过度认知化。', '可能让用户感觉自己的痛苦被简化成想法错误。'],
+  },
+  {
+    id: 'relationship-pattern',
+    name: '关系模式 Lens',
+    shortDescription: '看见亲密、回避、讨好、控制背后的重复关系脚本。',
+    sees: ['依恋需求', '重复关系模式', '讨好', '回避', '控制', '被抛弃感', '负担感'],
+    ignores: ['现实利益', '社会压力', '身体状态', '单次事件的偶然性'],
+    explainsPainAs: '痛苦可能来自旧关系模式在当前情境中的重复。',
+    coreQuestions: ['这个场景像不像你熟悉的某种关系位置？', '你在预防什么最坏的关系结果？', '你最怕别人如何看见你？'],
+    explorationMoves: ['命名当前关系里的默认位置。', '区分眼前的人和过去经验里的人。'],
+    risks: ['可能过度追溯过去。', '可能把现实关系复杂性简化成模式重复。'],
+  },
+  {
+    id: 'shame',
+    name: '羞耻 Lens',
+    shortDescription: '识别那些把事件变成“我这个人有问题”的深层叙事。',
+    sees: ['自我否定', '不配得感', '暴露恐惧', '被评价', '被看穿', '被排除'],
+    ignores: ['具体行动策略', '外部资源', '客观限制', '他人的责任'],
+    explainsPainAs: '痛苦可能来自“我这个人有问题”的深层叙事。',
+    coreQuestions: ['你把这件事解释成了自己哪里有问题？', '如果不把它变成自我审判，它还可能是什么？', '你最不想被别人看见的是什么？'],
+    explorationMoves: ['把“我有问题”改写成一个更具体的经验描述。', '分离事件、感受和自我价值。'],
+    risks: ['可能让用户过早接触强烈羞耻。', '可能忽略现实伤害和外部责任。'],
+  },
+  {
+    id: 'values',
+    name: '价值 Lens',
+    shortDescription: '把痛苦理解为生活正在偏离真正重要之物的信号。',
+    sees: ['价值背离', '选择困难', '行动断裂', '过度适应', '意义感断裂'],
+    ignores: ['短期稳定需求', '现实资源不足', '未处理的关系创伤'],
+    explainsPainAs: '痛苦可能来自生活正在偏离你真正重视的东西。',
+    coreQuestions: ['这件事触碰了你真正重视的什么？', '你正在为了适应牺牲什么？', '如果只往重要之物靠近一小步，那会是什么？'],
+    explorationMoves: ['从困扰中提取一个被压住的价值。', '设计一个不激进但更靠近价值的小行动。'],
+    risks: ['可能把现实困境浪漫化。', '可能让用户对自己提出过高行动要求。'],
+  },
+  {
+    id: 'body-signal',
+    name: '身体信号 Lens',
+    shortDescription: '把疲惫、紧张、失眠看作身体还没被语言表达的内容。',
+    sees: ['紧张', '疲惫', '失眠', '心悸', '身体边界', '长期压抑后的身体反应'],
+    ignores: ['抽象意义', '认知证据', '社会结构解释'],
+    explainsPainAs: '痛苦可能是身体在替你说出还没有被语言表达的东西。',
+    coreQuestions: ['这件事在身体哪里最明显？', '身体像是在拒绝什么或保护什么？', '如果身体能说一句话，它会说什么？'],
+    explorationMoves: ['用身体感受替代抽象判断来描述问题。', '识别一个需要被恢复的边界。'],
+    risks: ['可能忽略需要医学评估的身体症状。', '可能让用户过度解释身体信号。'],
+  },
+  {
+    id: 'social-context',
+    name: '社会处境 Lens',
+    shortDescription: '把个人困扰放回职业、家庭、时代和结构压力中理解。',
+    sees: ['职业压力', '阶层', '性别', '家庭结构', '绩效逻辑', '社会比较', '时代性焦虑'],
+    ignores: ['个人选择空间', '亲密关系细节', '身体信号', '认知偏差'],
+    explainsPainAs: '痛苦不一定只属于个人，也可能是某种社会处境压在你身上的结果。',
+    coreQuestions: ['这份痛苦有多少来自你个人，又有多少来自处境？', '你正在内化哪种外部标准？', '如果把责任还给环境一部分，会发生什么？'],
+    explorationMoves: ['把个人失败叙事改写为个人与处境的互动。', '识别一个可以拒绝内化的外部标准。'],
+    risks: ['可能削弱用户的行动感。', '可能把所有困扰都归因于外部结构。'],
+  },
+];
 
 export interface RefractionRequest {
   userId: string;
   question: string;
-  approachIds: string[];
+  lensIds?: string[];
+  approachIds?: string[];
 }
 
 export interface RefractionResult {
-  approachId: string;
-  approachName: string;
+  lensId: string;
+  lensName: string;
   content: string;
-  techniques: string[];
   latencyMs: number;
 }
 
@@ -22,105 +101,99 @@ export interface RefractionResult {
 export class RefractionService {
   private readonly logger = createLogger('RefractionService');
 
-  constructor(
-    private prisma: PrismaService,
-    private llm: LLMFallbackService,
-  ) {}
+  constructor(private llm: LLMFallbackService) {}
 
   async refract(data: RefractionRequest): Promise<RefractionResult[]> {
-    const { userId, question, approachIds } = data;
+    const { userId, question } = data;
+    const selectedIds = data.lensIds ?? data.approachIds ?? ['cognitive-judgment', 'relationship-pattern', 'values'];
+    const selectedLenses = selectedIds
+      .map((id) => LENSES.find((lens) => lens.id === id))
+      .filter((lens): lens is LensDefinition => Boolean(lens));
 
-    const approaches = await this.prisma.therapyApproach.findMany({
-      where: { name: { in: approachIds } },
-    });
-
-    const personas = await this.prisma.therapistPersona.findMany({
-      where: {
-        approachId: { in: approaches.map((a) => a.id) },
-        isBuiltIn: true,
-      },
-      include: { approach: true },
-    });
-
-    const personaMap = new Map<string, typeof personas[0]>();
-    for (const approach of approaches) {
-      const persona = personas.find((p) => p.approachId === approach.id);
-      if (persona) personaMap.set(approach.id, persona);
-    }
+    const lenses = selectedLenses.length > 0 ? selectedLenses : LENSES.slice(0, 3);
 
     const results = await Promise.all(
-      approaches.map(async (approach) => {
+      lenses.map(async (lens) => {
         const start = Date.now();
-        const persona = personaMap.get(approach.id);
-
-        if (!persona) {
-          return {
-            approachId: approach.name,
-            approachName: approach.displayName,
-            content: '该流派暂无可用咨询师。',
-            techniques: [],
-            latencyMs: 0,
-          };
-        }
-
-        const systemPrompt = compileSystemPrompt({
-          approachName: approach.name,
-          persona: {
-            name: persona.name,
-            description: persona.description,
-            styleTraits: (persona.styleTraits as any) || { directness: 0.5, warmth: 0.5, structure: 0.5, depth: 0.5 },
-            voiceTone: persona.voiceTone,
-            specialties: persona.specialties,
-            boundaries: persona.boundaries,
-            responseLength: 'concise',
-          },
-          phaseContext: {
-            phase: 'theme_work' as any,
-            sessionNumber: 1,
-          },
-        });
-
-        const refractionPrompt = `${systemPrompt}\n\n---\n\n【特殊任务：流派折射】\n来访者提出了一个问题，需要你从${approach.displayName}的角度进行分析。\n\n要求：\n- 提供该流派的核心视角（1-2 句话）\n- 提出 2-3 个该流派会关注的问题\n- 建议 1-2 个该流派的干预技术\n- 总长度不超过 200 字\n- 在末尾标注使用的技术（格式：【技术名称】）`;
 
         try {
-          const res = await this.llm.chat(
+          const response = await this.llm.chat(
             [
-              { role: 'system', content: refractionPrompt },
+              { role: 'system', content: this.buildLensPrompt(lens) },
               { role: 'user', content: question },
             ],
-            { temperature: 0.7, maxTokens: 512 },
+            { temperature: 0.65, maxTokens: 700 },
           );
 
-          const techniqueMatches = res.content.match(/【(.+?)】/g);
-          const techniques = techniqueMatches
-            ? techniqueMatches.map((m) => m.replace(/[【】]/g, ''))
-            : [];
-
           return {
-            approachId: approach.name,
-            approachName: approach.displayName,
-            content: res.content,
-            techniques,
+            lensId: lens.id,
+            lensName: lens.name,
+            content: response.content.trim(),
             latencyMs: Date.now() - start,
           };
-        } catch (err) {
-          this.logger.error('Refraction failed', { approach: approach.name, error: err });
+        } catch (error) {
+          this.logger.error('Lens refraction failed', { lens: lens.id, error });
           return {
-            approachId: approach.name,
-            approachName: approach.displayName,
-            content: '分析过程中出现错误，请稍后重试。',
-            techniques: [],
+            lensId: lens.id,
+            lensName: lens.name,
+            content: '这个 Lens 暂时没有完成折射。你可以稍后重试，或先换一个视角看这件事。',
             latencyMs: Date.now() - start,
           };
         }
       }),
     );
 
-    this.logger.info('Refraction completed', {
+    this.logger.info('Lens refraction completed', {
       userId,
-      approachCount: approachIds.length,
+      lensCount: lenses.length,
     });
 
     return results;
+  }
+
+  private buildLensPrompt(lens: LensDefinition): string {
+    return `你是 OhMe 的一个 Lens，不是医生、咨询师或人生导师。
+
+Lens 名称：${lens.name}
+Lens 描述：${lens.shortDescription}
+
+你天然会看见：
+${lens.sees.map((item) => `- ${item}`).join('\n')}
+
+你容易忽略：
+${lens.ignores.map((item) => `- ${item}`).join('\n')}
+
+你如何解释痛苦：
+${lens.explainsPainAs}
+
+你常用的问题：
+${lens.coreQuestions.map((item) => `- ${item}`).join('\n')}
+
+你常用的探索动作：
+${lens.explorationMoves.map((item) => `- ${item}`).join('\n')}
+
+风险边界：
+${lens.risks.map((item) => `- ${item}`).join('\n')}
+
+任务：用户会给你一个困扰。请只从这个 Lens 出发折射它。
+
+输出必须使用下面 5 个小标题，不要增删标题：
+
+理解
+用 1-2 句话说明这个 Lens 如何理解该问题。不要下诊断。
+
+看见
+列出 2-3 个这个 Lens 看见的信号。
+
+盲区
+用 1 句话提醒这个 Lens 可能忽略什么。
+
+关键问题
+只提出 1 个最值得用户继续看的问题。
+
+小探索动作
+给出 1 个轻量、非医疗、可在今天完成的探索动作。
+
+风格要求：克制、清晰、有洞察；不鸡汤；不说“你应该”；不承诺疗效；总长度不超过 260 字。`;
   }
 }
