@@ -186,7 +186,7 @@ export class ExplorationService {
    * 保存深潜产物到 Self Model。
    * 在深潜完成后调用，生成 SelfModelEntry。
    */
-  async saveToSelfModel(sessionId: string): Promise<{ entryId: string }> {
+  async saveToSelfModel(sessionId: string): Promise<{ entryId: string; experimentId?: string }> {
     const session = await this.prisma.explorationSession.findUnique({
       where: { id: sessionId },
       include: { lens: true },
@@ -232,16 +232,32 @@ export class ExplorationService {
       data: { selfModelEntryId: entry.id },
     });
 
+    // 如果选择了实验，同时创建 Experiment
+    let experimentId: string | undefined;
+    if (session.selectedExperiment) {
+      const experiment = await this.prisma.experiment.create({
+        data: {
+          selfModelId: selfModel.id,
+          description: session.selectedExperiment,
+          sourceLensId: session.lensId,
+          sourceLensName: session.lens.name,
+          status: 'pending',
+        },
+      });
+      experimentId = experiment.id;
+    }
+
     // 更新 SelfModel 聚合缓存
     await this.updateSelfModelAggregates(selfModel.id);
 
     this.logger.info('Saved to SelfModel', {
       sessionId,
       entryId: entry.id,
+      experimentId,
       userId: session.userId,
     });
 
-    return { entryId: entry.id };
+    return { entryId: entry.id, experimentId };
   }
 
   /**

@@ -2,12 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ModeToggle } from "@/components/mode-toggle";
 import { getAllLensOptions, LensOption } from "@/lib/lenses";
-import { ArrowRight, Compass, Library, NotebookText, ScanLine, Sparkles, Wand2 } from "lucide-react";
+import { ArrowRight, Beaker, Compass, Library, Lightbulb, NotebookText, ScanLine, Sparkles, Wand2 } from "lucide-react";
 
 export default function HomePage() {
   const router = useRouter();
@@ -18,6 +19,8 @@ export default function HomePage() {
     "relationship-pattern",
     "shame",
   ]);
+  const [selfModelStats, setSelfModelStats] = useState<{ totalEntries: number; activeExperiments: number } | null>(null);
+  const [insights, setInsights] = useState<Array<{ title: string; description: string; href?: string }>>([]);
 
   const selectedCount = selectedLensIds.length;
   const canReflect = question.trim().length > 0 && selectedCount > 0;
@@ -29,6 +32,21 @@ export default function HomePage() {
 
   useEffect(() => {
     setLensOptions(getAllLensOptions());
+    // 加载 Self Model 摘要
+    api.selfModel.get("default")
+      .then((data) => {
+        setSelfModelStats(data.stats);
+      })
+      .catch(() => {});
+    api.selfModel.insights("default")
+      .then((data) => {
+        setInsights(data.slice(0, 2).map((i: any) => ({
+          title: i.title,
+          description: i.description,
+          href: i.action?.href,
+        })));
+      })
+      .catch(() => {});
   }, []);
 
   const toggleLens = (id: string) => {
@@ -154,6 +172,80 @@ export default function HomePage() {
         </section>
 
         <aside className="space-y-4">
+          {/* Self Model 摘要 Widget */}
+          {selfModelStats && selfModelStats.totalEntries > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <NotebookText className="h-4 w-4" />
+                  你的 Self Model
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="rounded-lg bg-muted p-2 text-center">
+                    <div className="text-xl font-semibold">{selfModelStats.totalEntries}</div>
+                    <div className="text-[10px] text-muted-foreground">条新解释</div>
+                  </div>
+                  <div className="rounded-lg bg-muted p-2 text-center">
+                    <div className="text-xl font-semibold">{selfModelStats.activeExperiments}</div>
+                    <div className="text-[10px] text-muted-foreground">个实验</div>
+                  </div>
+                </div>
+                <Button variant="outline" size="sm" className="w-full" onClick={() => router.push("/model")}>
+                  查看完整地图 →
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Insight Stream */}
+          {insights.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Lightbulb className="h-4 w-4" />
+                  洞察
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {insights.map((insight, i) => (
+                  <div key={i} className="rounded-lg bg-muted p-3 text-sm">
+                    <p className="font-medium">{insight.title}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{insight.description}</p>
+                    {insight.href && (
+                      <Button
+                        variant="link"
+                        size="sm"
+                        className="mt-1 h-auto p-0 text-xs"
+                        onClick={() => router.push(insight.href!)}
+                      >
+                        去看看 →
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* 正在进行的实验 */}
+          {selfModelStats && selfModelStats.activeExperiments > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Beaker className="h-4 w-4" />
+                  正在进行的实验
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Button variant="outline" size="sm" className="w-full" onClick={() => router.push("/model")}>
+                  去记录进展 →
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">

@@ -4,18 +4,23 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { findLens } from "@/lib/lenses";
+import { NarrativeMap } from "@/components/self-model/narrative-map";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Textarea } from "@/components/ui/textarea";
 import { ModeToggle } from "@/components/mode-toggle";
 import {
   ArrowLeft,
   Beaker,
+  Check,
   Compass,
   Lightbulb,
   Loader2,
   NotebookText,
+  Pencil,
   Sparkles,
   Trash2,
+  X,
 } from "lucide-react";
 
 interface SelfModelOverview {
@@ -38,6 +43,7 @@ interface SelfModelOverview {
     lensName: string;
     question: string;
     createdAt: string;
+    userEdited?: boolean;
   }>;
   activeExperiments: Array<{
     id: string;
@@ -63,6 +69,9 @@ export default function SelfModelPage() {
   const [insights, setInsights] = useState<Insight[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [deletingEntryId, setDeletingEntryId] = useState<string | null>(null);
+  const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
+  const [editText, setEditText] = useState("");
+  const [updatingExperimentId, setUpdatingExperimentId] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
@@ -93,6 +102,42 @@ export default function SelfModelPage() {
       console.error("Failed to delete entry:", err);
     } finally {
       setDeletingEntryId(null);
+    }
+  };
+
+  const startEdit = (entry: { id: string; newNarrative: string }) => {
+    setEditingEntryId(entry.id);
+    setEditText(entry.newNarrative);
+  };
+
+  const cancelEdit = () => {
+    setEditingEntryId(null);
+    setEditText("");
+  };
+
+  const saveEdit = async (entryId: string) => {
+    if (!editText.trim()) return;
+    try {
+      await api.selfModel.updateEntry(entryId, {
+        newNarrative: editText.trim(),
+        userEdited: true,
+      });
+      setEditingEntryId(null);
+      await loadData();
+    } catch (err) {
+      console.error("Failed to update entry:", err);
+    }
+  };
+
+  const updateExperiment = async (experimentId: string, status: string) => {
+    setUpdatingExperimentId(experimentId);
+    try {
+      await api.selfModel.updateExperiment(experimentId, { status });
+      await loadData();
+    } catch (err) {
+      console.error("Failed to update experiment:", err);
+    } finally {
+      setUpdatingExperimentId(null);
     }
   };
 
@@ -161,6 +206,24 @@ export default function SelfModelPage() {
                   </div>
                 </CardContent>
               </Card>
+
+              {/* 解释地图 */}
+              {overview.recentEntries.length > 1 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">解释地图</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <NarrativeMap
+                      entries={overview.recentEntries.slice(0, 8)}
+                      onEntryClick={(id) => {
+                        const el = document.getElementById(`entry-${id}`);
+                        el?.scrollIntoView({ behavior: "smooth", block: "center" });
+                      }}
+                    />
+                  </CardContent>
+                </Card>
+              )}
 
               {/* 高频 Lens */}
               <Card>
@@ -254,17 +317,52 @@ export default function SelfModelPage() {
                     {overview.activeExperiments.map((exp) => (
                       <div
                         key={exp.id}
-                        className="flex items-start justify-between rounded-lg border p-3"
+                        className="flex flex-col gap-3 rounded-lg border p-3 sm:flex-row sm:items-start sm:justify-between"
                       >
-                        <div>
+                        <div className="flex-1">
                           <p className="text-sm">{exp.description}</p>
                           <p className="mt-1 text-xs text-muted-foreground">
                             来自 {exp.sourceLensName || "Lens"}
                           </p>
                         </div>
-                        <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] text-amber-700 dark:text-amber-300">
-                          {exp.status === "active" ? "进行中" : "待开始"}
-                        </span>
+                        <div className="flex flex-wrap gap-2">
+                          {exp.status === "pending" && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => updateExperiment(exp.id, "active")}
+                              disabled={updatingExperimentId === exp.id}
+                            >
+                              {updatingExperimentId === exp.id ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                "开始"
+                              )}
+                            </Button>
+                          )}
+                          {exp.status === "active" && (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => updateExperiment(exp.id, "completed")}
+                                disabled={updatingExperimentId === exp.id}
+                              >
+                                <Check className="mr-1 h-3.5 w-3.5" />
+                                完成
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => updateExperiment(exp.id, "dropped")}
+                                disabled={updatingExperimentId === exp.id}
+                              >
+                                <X className="mr-1 h-3.5 w-3.5" />
+                                放弃
+                              </Button>
+                            </>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </CardContent>
@@ -275,12 +373,14 @@ export default function SelfModelPage() {
               <div className="space-y-3">
                 <h2 className="text-sm font-medium text-muted-foreground">最近的新解释</h2>
                 {overview.recentEntries.map((entry) => {
-                  const lens = findLens(entry.lensName); // 这里用 name 找可能不准，先简单处理
+                  const lens = findLens(entry.lensName);
+                  const isEditing = editingEntryId === entry.id;
+
                   return (
-                    <Card key={entry.id}>
+                    <Card key={entry.id} id={`entry-${entry.id}`}>
                       <CardHeader className="space-y-3">
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                          <div className="space-y-2">
+                          <div className="space-y-2 flex-1">
                             <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                               <span
                                 className={`h-2.5 w-2.5 rounded-full ${lens?.color || "bg-primary"}`}
@@ -294,24 +394,62 @@ export default function SelfModelPage() {
                                   minute: "2-digit",
                                 })}
                               </span>
+                              {entry.userEdited && (
+                                <span className="rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-700">
+                                  已编辑
+                                </span>
+                              )}
                             </div>
-                            <CardTitle className="text-base leading-6">
-                              {entry.newNarrative}
-                            </CardTitle>
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => deleteEntry(entry.id)}
-                            disabled={deletingEntryId === entry.id}
-                            aria-label="删除解释"
-                          >
-                            {deletingEntryId === entry.id ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
+
+                            {isEditing ? (
+                              <div className="space-y-2">
+                                <Textarea
+                                  value={editText}
+                                  onChange={(e) => setEditText(e.target.value)}
+                                  rows={3}
+                                  className="resize-none"
+                                />
+                                <div className="flex gap-2">
+                                  <Button size="sm" onClick={() => saveEdit(entry.id)}>
+                                    保存
+                                  </Button>
+                                  <Button size="sm" variant="ghost" onClick={cancelEdit}>
+                                    取消
+                                  </Button>
+                                </div>
+                              </div>
                             ) : (
-                              <Trash2 className="h-4 w-4" />
+                              <CardTitle className="text-base leading-6">
+                                {entry.newNarrative}
+                              </CardTitle>
                             )}
-                          </Button>
+                          </div>
+
+                          {!isEditing && (
+                            <div className="flex items-center gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => startEdit(entry)}
+                                aria-label="编辑"
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => deleteEntry(entry.id)}
+                                disabled={deletingEntryId === entry.id}
+                                aria-label="删除解释"
+                              >
+                                {deletingEntryId === entry.id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Trash2 className="h-4 w-4" />
+                                )}
+                              </Button>
+                            </div>
+                          )}
                         </div>
                       </CardHeader>
                       {entry.originalNarrative && (
@@ -319,10 +457,6 @@ export default function SelfModelPage() {
                           <div className="rounded-lg bg-muted p-3">
                             <div className="mb-1 text-xs text-muted-foreground">原问题</div>
                             {entry.originalNarrative}
-                          </div>
-                          <div className="rounded-lg border p-3">
-                            <div className="mb-1 text-xs text-muted-foreground">新解释</div>
-                            {entry.newNarrative}
                           </div>
                         </CardContent>
                       )}
