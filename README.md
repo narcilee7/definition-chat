@@ -11,7 +11,9 @@ ohme/
 │   └── api/          # Nest.js 10 + Prisma + Agent Framework
 ├── packages/
 │   ├── types/        # 共享 TypeScript 类型
-│   └── config/       # 共享 ESLint + TSConfig
+│   ├── config/       # 共享 ESLint + TSConfig
+│   ├── observability/# 共享日志、链路追踪抽象
+│   └── agent-framework/# Agent 运行时框架
 ├── prisma/           # SQLite 数据库 Schema
 └── .github/
     └── workflows/    # CI/CD
@@ -26,19 +28,23 @@ agent-framework/
 │   ├── registry.ts       # Agent 注册表
 │   └── types.ts          # 核心类型定义
 ├── providers/
-│   ├── siliconflow.provider.ts   # 硅基流动 (国内, 主推)
-│   ├── deepseek.provider.ts      # DeepSeek
-│   ├── groq.provider.ts          # Groq (超快)
-│   ├── openrouter.provider.ts    # OpenRouter
-│   └── openai-compatible.provider.ts  # 通用兼容层
+│   ├── base.ts           # Provider 基类（含调用日志 & 超时控制）
+│   ├── siliconflow.ts    # 硅基流动 (国内, 低价)
+│   ├── deepseek.ts       # DeepSeek (推理强)
+│   ├── groq.ts           # Groq (超快)
+│   ├── openrouter.ts     # OpenRouter (聚合)
+│   └── openai-compatible.ts  # 通用兼容层
 ├── memory/
-│   ├── buffer.memory.ts   # 内存环形缓冲
-│   ├── window.memory.ts   # Token 感知滑动窗口
-│   └── sqlite.memory.ts   # SQLite 持久化
+│   ├── buffer.ts         # 内存环形缓冲
+│   ├── window.ts         # Token 感知滑动窗口
+│   └── sqlite.ts         # SQLite 持久化
+├── retry/
+│   ├── retry.ts          # 指数退避重试
+│   └── circuit-breaker.ts # 熔断器
 └── orchestrator/
-    ├── parallel.ts        # 并行执行
-    ├── sequential.ts      # 串行传递
-    └── debate.ts          # 双方辩论
+    ├── parallel.ts       # 并行执行
+    ├── sequential.ts     # 串行传递
+    └── debate.ts         # 双方辩论
 ```
 
 ## 本地运行
@@ -73,7 +79,43 @@ pnpm --filter @ohme/web dev      # http://localhost:3000
 | **OpenRouter** | `OPENROUTER_API_KEY` | 聚合平台，fallback |
 | **Generic** | `OPENAI_COMPAT_*` | 任意兼容服务商 |
 
-设置 `DEFAULT_LLM_PROVIDER=siliconflow` 选择默认提供商。
+设置 `DEFAULT_LLM_PROVIDER` 选择默认提供商：
+
+```bash
+DEFAULT_LLM_PROVIDER=deepseek   # 可选: siliconflow | deepseek | groq | openrouter | openai-compatible
+```
+
+### 自动容错降级
+
+系统会自动按优先级尝试多个已配置 API Key 的 Provider：
+
+1. **首选**：`DEFAULT_LLM_PROVIDER` 指定的 Provider
+2. **降级**：其他已配置 API Key 的 Provider（依次尝试）
+
+当首选 Provider 失败（如 401、超时、服务不可用）时，自动无缝切换到下一个可用 Provider，确保服务不中断。所有降级过程都会记录到日志中。
+
+## 日志体系
+
+基于 `nestjs-pino` + `@ohme/observability` 构建：
+
+- **开发环境**：`pino-pretty` 美化输出，带颜色和时间戳
+- **生产环境**：JSON 结构化输出，便于 ELK / Loki 采集
+- **自动脱敏**：请求日志自动移除 `authorization` 和 `cookie` 头
+- **全链路覆盖**：HTTP 请求、LLM 调用、业务操作、数据库连接均有日志
+
+```bash
+# 调整日志级别
+LOG_LEVEL=debug   # debug | info | warn | error
+```
+
+关键日志场景：
+
+| 场景 | 日志内容 |
+|------|---------|
+| HTTP 请求 | 方法、路径、状态码、耗时、IP |
+| LLM 调用 | Provider、模型、耗时、Token、成功/失败 |
+| 业务操作 | Session 创建、Agent 增删、消息收发 |
+| 异常 | 堆栈、请求上下文、标准化错误响应 |
 
 ## 内置 Agent
 
