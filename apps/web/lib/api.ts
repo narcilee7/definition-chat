@@ -50,6 +50,15 @@ export const api = {
     latest: (type: string, userId?: string) => fetchJson<any>(`/api/assessments/${type}/latest?userId=${userId || "default"}`),
   },
 
+  safety: {
+    get: (userId: string) => fetchJson<any>(`/api/safety-plans/${userId}`),
+    save: (userId: string, data: any) =>
+      fetchJson<any>(`/api/safety-plans/${userId}`, { method: "POST", body: JSON.stringify(data) }),
+  },
+  refraction: {
+    analyze: (data: { userId: string; question: string; approachIds: string[] }) =>
+      fetchJson<any>("/api/refraction", { method: "POST", body: JSON.stringify(data) }),
+  },
   builder: {
     chat: (data: { sessionId: string; content: string }) =>
       fetchJson<any>("/api/builder/chat", { method: "POST", body: JSON.stringify(data) }),

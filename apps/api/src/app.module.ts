@@ -10,6 +10,8 @@ import { SessionsModule } from './sessions/sessions.module';
 import { BuilderModule } from './builder/builder.module';
 import { InsightModule } from './insight/insight.module';
 import { AssessmentModule } from './assessment/assessment.module';
+import { SafetyModule } from './safety/safety.module';
+import { RefractionModule } from './refraction/refraction.module';
 import { AgentsModule } from './agents/agents.module';
 import { AgentLoaderService } from './agent-loader.service';
 
@@ -27,6 +29,8 @@ import { AgentLoaderService } from './agent-loader.service';
     BuilderModule,
     InsightModule,
     AssessmentModule,
+    SafetyModule,
+    RefractionModule,
   ],
   providers: [AgentLoaderService],
 })
