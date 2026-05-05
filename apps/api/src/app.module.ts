@@ -15,6 +15,8 @@ import { RefractionModule } from './refraction/refraction.module';
 import { AgentsModule } from './agents/agents.module';
 import { AgentLoaderService } from './agent-loader.service';
 import { ExploreModule } from './explore/explore.module';
+import { SelfModelModule } from './self-model/self-model.module';
+import { LensModule } from './lenses/lens.module';
 
 @Module({
   imports: [
@@ -33,6 +35,8 @@ import { ExploreModule } from './explore/explore.module';
     SafetyModule,
     RefractionModule,
     ExploreModule,
+    SelfModelModule,
+    LensModule,
   ],
   providers: [AgentLoaderService],
 })

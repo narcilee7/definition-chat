@@ -30,6 +30,11 @@ model User {
   safetyPlan    SafetyPlan?
   crisisLogs    CrisisLog[]
 
+  // V4: Lens System
+  selfModel     SelfModel?
+  explorationSessions ExplorationSession[]
+  lenses        Lens[]        @relation("LensAuthor")
+
   @@map("users")
 }
 
@@ -295,4 +300,175 @@ model CrisisLog {
   sessionId       String? @map("session_id")
 
   @@map("crisis_logs")
+}
+
+
+// ============================================================
+// V4: Lens System Layer（与 Therapy Layer 共存，后续逐步迁移）
+// ============================================================
+
+model Lens {
+  id              String   @id @default(cuid())
+
+  // 基础信息
+  name            String
+  shortDescription String  @map("short_description")
+  description     String?  @db.Text
+  domains         String[]
+
+  // Lens 协议（核心）
+  sees             String[]
+  ignores          String[]
+  explainsPainAs   String   @map("explains_pain_as") @db.Text
+  coreQuestions    String[] @map("core_questions")
+  explorationMoves String[] @map("exploration_moves")
+  risks            String[]
+  safetyBoundary   String[] @map("safety_boundary")
+
+  // 输出结构与调参
+  outputStructure  Json?    @map("output_structure")
+  tone             Json?    // { style, temperature, constraints }
+
+  // 作者信息
+  authorId    String?  @map("author_id")
+  author      User?    @relation("LensAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  authorName  String?  @map("author_name")
+  forkedFrom  String?  @map("forked_from") // 原 Lens ID
+
+  // 可见性
+  visibility  String   @default("public")  // public | unlisted | private
+
+  // 统计
+  useCount    Int      @default(0) @map("use_count")
+  forkCount   Int      @default(0) @map("fork_count")
+  avgRating   Float?   @map("avg_rating")
+
+  // 状态
+  status      String   @default("active")  // active | deprecated | review
+
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // 关系
+  explorationSessions ExplorationSession[]
+
+  @@map("lenses")
+}
+
+model ExplorationSession {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  lensId    String   @map("lens_id")
+  lens      Lens     @relation(fields: [lensId], references: [id])
+
+  originalQuestion String @map("original_question")
+  phase     String   @default("clarify") // clarify | identify | hypothesize | validate | reframe | experiment | complete
+
+  // 各阶段产物
+  clarifiedQuestion String? @map("clarified_question")
+  identifiedSignals String[] @map("identified_signals")
+  hypothesis        String?
+  userValidation    String? @map("user_validation")     // "confirmed" | "revised: ..."
+  revisedHypothesis String? @map("revised_hypothesis")
+  newNarrative      String? @map("new_narrative")       // 核心产物
+  selectedExperiment String? @map("selected_experiment")
+
+  // 关联产物
+  selfModelEntryId  String? @unique @map("self_model_entry_id")
+  selfModelEntry    SelfModelEntry? @relation(fields: [selfModelEntryId], references: [id])
+
+  // 消息历史
+  messages    ExplorationMessage[]
+
+  createdAt   DateTime @default(now()) @map("created_at")
+  completedAt DateTime? @map("completed_at")
+
+  @@map("exploration_sessions")
+}
+
+model ExplorationMessage {
+  id        String   @id @default(cuid())
+  sessionId String   @map("session_id")
+  session   ExplorationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  role      String   // user | lens | system
+  content   String
+  phase     String   // 当前阶段
+
+  // 元数据
+  metadata  Json?    // { signalTag, hypothesisVersion, isPhaseTransition, ... }
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("exploration_messages")
+}
+
+model SelfModel {
+  id        String   @id @default(cuid())
+  userId    String   @unique @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // 聚合数据（自动计算缓存）
+  topThemes         Json? @map("top_themes")           // [{ theme, count, lastSeenAt }]
+  topLenses         Json? @map("top_lenses")           // [{ lensId, lensName, count }]
+  recurringPatterns Json? @map("recurring_patterns")   // [{ pattern, frequency, confidence }]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // 关系
+  entries     SelfModelEntry[]
+  experiments Experiment[]
+
+  @@map("self_models")
+}
+
+model SelfModelEntry {
+  id        String   @id @default(cuid())
+  selfModelId String @map("self_model_id")
+  selfModel   SelfModel @relation(fields: [selfModelId], references: [id], onDelete: Cascade)
+
+  entryType String   @map("entry_type")  // new_narrative | pattern | insight | shift
+
+  // 核心内容
+  originalNarrative String? @map("original_narrative")
+  newNarrative      String  @map("new_narrative")
+
+  // 上下文
+  lensId      String   @map("lens_id")
+  lensName    String   @map("lens_name")
+  question    String
+  sessionId   String?  @map("session_id")
+
+  // 元数据
+  userEdited  Boolean  @default(false) @map("user_edited")
+  tags        String[]
+
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  // 反向关系
+  explorationSession ExplorationSession?
+
+  @@map("self_model_entries")
+}
+
+model Experiment {
+  id        String   @id @default(cuid())
+  selfModelId String @map("self_model_id")
+  selfModel   SelfModel @relation(fields: [selfModelId], references: [id], onDelete: Cascade)
+
+  description String
+  sourceLensId String @map("source_lens_id")
+  sourceLensName String? @map("source_lens_name")
+
+  status      String   @default("pending")  // pending | active | completed | dropped
+  startedAt   DateTime? @map("started_at")
+  completedAt DateTime? @map("completed_at")
+  reflection  String?  // 用户完成后的反思
+
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("experiments")
 }
