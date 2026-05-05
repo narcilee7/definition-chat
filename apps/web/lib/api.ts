@@ -18,6 +18,12 @@ export const api = {
     get: (id: string) => fetchJson<any>(`/api/sessions/${id}`),
     addMessage: (id: string, data: { role: string; content: string }) =>
       fetchJson<any>(`/api/sessions/${id}/messages`, { method: "POST", body: JSON.stringify(data) }),
+    feedback: (id: string, data: { allianceRating: number; moodAfter?: number; note?: string }) =>
+      fetchJson<any>(`/api/sessions/${id}/feedback`, { method: "POST", body: JSON.stringify(data) }),
+    mood: (id: string, data: { moodScore: number; anxietyScore?: number; stressScore?: number; note?: string }) =>
+      fetchJson<any>(`/api/sessions/${id}/mood`, { method: "POST", body: JSON.stringify(data) }),
+    updateHomework: (id: string, index: number, data: { completed: boolean; reflection?: string }) =>
+      fetchJson<any>(`/api/sessions/${id}/homework/${index}`, { method: "PATCH", body: JSON.stringify(data) }),
   },
 
   therapy: {
@@ -35,6 +41,8 @@ export const api = {
     },
     setPhase: (id: string, phase: string) =>
       fetchJson<any>(`/api/therapy/sessions/${id}/phase`, { method: "POST", body: JSON.stringify({ phase }) }),
+    completeSession: (id: string) =>
+      fetchJson<any>(`/api/therapy/sessions/${id}/complete`, { method: "POST" }),
   },
 
   personas: {
@@ -48,6 +56,10 @@ export const api = {
     submit: (data: any) => fetchJson<any>("/api/assessments", { method: "POST", body: JSON.stringify(data) }),
     trend: (type: string, userId?: string) => fetchJson<any>(`/api/assessments/trend?type=${type}&userId=${userId || "default"}`),
     latest: (type: string, userId?: string) => fetchJson<any>(`/api/assessments/${type}/latest?userId=${userId || "default"}`),
+  },
+
+  caseFormulations: {
+    latest: (userId: string) => fetchJson<any>(`/api/case-formulations/${userId}/latest`),
   },
 
   safety: {

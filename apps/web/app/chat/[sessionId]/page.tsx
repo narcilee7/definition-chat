@@ -1,15 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
 import { MarkdownRenderer } from "@/components/markdown-renderer";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ModeToggle } from "@/components/mode-toggle";
-import { Badge } from "@/components/ui/badge";
-import { Send, Loader2, ArrowLeft, ShieldAlert } from "lucide-react";
+import { Send, Loader2, ArrowLeft, ShieldAlert, Star, Settings } from "lucide-react";
 
 interface ChatMessage {
   id: string;
@@ -33,6 +32,7 @@ function RiskWarningText({ riskLevel }: { riskLevel: string }) {
 export default function ChatPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const sessionId = params.sessionId as string;
 
   const [session, setSession] = useState<any>(null);
@@ -40,9 +40,12 @@ export default function ChatPage() {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isCompleting, setIsCompleting] = useState(false);
   const [riskLevel, setRiskLevel] = useState("none");
+  const [feedbackSent, setFeedbackSent] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const initialMessageSentRef = useRef(false);
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -68,6 +71,7 @@ export default function ChatPage() {
       const sessionData = await api.therapy.getSession(sessionId);
       setSession(sessionData);
       setRiskLevel(sessionData.riskLevel || "none");
+      setFeedbackSent(Boolean(sessionData.allianceRating));
       if (sessionData.messages) {
         setMessages(sessionData.messages);
       }
@@ -78,9 +82,9 @@ export default function ChatPage() {
     }
   };
 
-  const handleSend = async () => {
-    if (!input.trim() || isLoading) return;
-    const content = input.trim();
+  const sendContent = async (rawContent: string) => {
+    if (!rawContent.trim() || isLoading) return;
+    const content = rawContent.trim();
     setInput("");
 
     // Optimistically add user message
@@ -174,10 +178,58 @@ export default function ChatPage() {
     }
   };
 
+  const handleSend = async () => {
+    await sendContent(input);
+  };
+
+  useEffect(() => {
+    const shouldStart = searchParams.get("start") === "1";
+    const presentingProblem = session?.presentingProblem?.trim();
+    if (
+      !shouldStart ||
+      !presentingProblem ||
+      messages.length > 0 ||
+      isLoading ||
+      initialMessageSentRef.current
+    ) {
+      return;
+    }
+
+    initialMessageSentRef.current = true;
+    router.replace(`/chat/${sessionId}`);
+    void sendContent(presentingProblem);
+  }, [searchParams, session, messages.length, isLoading, router, sessionId]);
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSend();
+    }
+  };
+
+  const submitFeedback = async (score: number) => {
+    if (feedbackSent) return;
+    setFeedbackSent(true);
+    try {
+      await api.sessions.feedback(sessionId, { allianceRating: score });
+    } catch (err) {
+      console.error(err);
+      setFeedbackSent(false);
+    }
+  };
+
+  const completeSession = async () => {
+    if (isCompleting || isLoading) return;
+    setIsCompleting(true);
+    try {
+      const result = await api.therapy.completeSession(sessionId);
+      setSession((prev: any) => ({ ...prev, ...result }));
+      await loadSession();
+      router.push("/progress");
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsCompleting(false);
     }
   };
 
@@ -228,6 +280,9 @@ export default function ChatPage() {
             {riskLevel !== "none" && (
               <ShieldAlert className={`h-4 w-4 ${getRiskColor()}`} />
             )}
+            <Button variant="ghost" size="icon" onClick={() => router.push("/settings")}>
+              <Settings className="h-4 w-4" />
+            </Button>
             <ModeToggle />
           </div>
         </div>
@@ -266,17 +321,34 @@ export default function ChatPage() {
                   ) : (
                     <div className="leading-relaxed">
                       <MarkdownRenderer content={msg.content} />
-                      {msg.techniqueUsed && (
-                        <Badge variant="secondary" className="mt-2 text-[10px]">
-                          {msg.techniqueUsed}
-                        </Badge>
-                      )}
                     </div>
                   )}
                 </div>
               </div>
             );
           })}
+
+          {messages.some((msg) => msg.role === "therapist" && msg.content.trim()) && !isLoading && (
+            <div className="flex justify-center">
+              <div className="flex items-center gap-2 rounded-md border bg-background px-3 py-2 text-xs text-muted-foreground">
+                <span>{feedbackSent ? "已记录" : "这次对话有帮助吗"}</span>
+                {!feedbackSent && (
+                  <div className="flex items-center gap-1">
+                    {[1, 2, 3, 4, 5].map((score) => (
+                      <button
+                        key={score}
+                        onClick={() => submitFeedback(score)}
+                        className="rounded p-1 transition-colors hover:bg-accent hover:text-foreground"
+                        aria-label={`${score} 分`}
+                      >
+                        <Star className="h-3.5 w-3.5" />
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {isLoading && messages[messages.length - 1]?.role !== "therapist" && (
             <div className="flex justify-start">
@@ -330,6 +402,19 @@ export default function ChatPage() {
           <p className="text-[10px] text-muted-foreground mt-2 text-center">
             {isLoading ? "生成中..." : "Enter 发送 · Shift + Enter 换行"}
           </p>
+          {messages.some((msg) => msg.role === "therapist" && msg.content.trim()) && (
+            <div className="mt-3 flex justify-center">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={completeSession}
+                disabled={isLoading || isCompleting}
+              >
+                {isCompleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                结束本次并生成小结
+              </Button>
+            </div>
+          )}
         </div>
       </div>
     </div>

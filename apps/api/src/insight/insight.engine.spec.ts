@@ -16,7 +16,7 @@ function createMockPrisma() {
   const userContexts: any[] = [];
 
   return {
-    session: {
+    therapySession: {
       findUnique: async ({ where }: any) => {
         const s = sessions.find((s) => s.id === where.id);
         if (!s) return null;

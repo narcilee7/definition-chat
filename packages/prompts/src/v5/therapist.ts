@@ -305,10 +305,14 @@ export function buildV5PhaseAwareness(ctx: {
 
   // 阶段
   const phaseNameMap: Record<string, string> = {
-    agenda_setting: '议程设置阶段',
-    mood_check: '情绪检查阶段',
-    theme_work: '主题工作阶段',
-    summary: '总结收束阶段',
+    engagement: '建立关系阶段',
+    assessment: '评估与聚焦阶段',
+    intervention: '干预工作阶段',
+    closure: '总结与练习阶段',
+    agenda_setting: '建立关系阶段',
+    mood_check: '评估与聚焦阶段',
+    theme_work: '干预工作阶段',
+    summary: '总结与练习阶段',
   };
   parts.push(`当前阶段：${phaseNameMap[ctx.phase] || ctx.phase}。`);
 
@@ -351,33 +355,30 @@ export function buildV5PhaseAwareness(ctx: {
   }
 
   // 阶段具体指令
-  if (ctx.phase === 'agenda_setting') {
-    parts.push(`\n【阶段任务：议程设置】`);
-    parts.push(`- 温暖问候`);
-    parts.push(`- 回顾上次内容（如有）`);
-    parts.push(`- 询问本周情绪和重要事件`);
-    parts.push(`- 与来访者共同确定本次优先讨论的主题`);
-    parts.push(`- 自然过渡，不要让来访者感到被"流程化"`);
-  } else if (ctx.phase === 'mood_check') {
-    parts.push(`\n【阶段任务：情绪检查】`);
-    parts.push(`- 了解来访者本周整体情绪状态`);
-    parts.push(`- 回顾作业完成情况（如有）`);
-    parts.push(`- 询问本周的重要事件和触发因素`);
-    parts.push(`- 注意情绪变化趋势`);
-    parts.push(`- 如果发现情绪急剧恶化，注意风险信号`);
-  } else if (ctx.phase === 'theme_work') {
-    parts.push(`\n【阶段任务：主题工作】`);
-    parts.push(`- 聚焦本次议程主题，不过度发散`);
-    parts.push(`- 使用合适的干预技术`);
-    parts.push(`- 每次干预后检查来访者的反应`);
-    parts.push(`- 注意识别和标注认知扭曲/防御机制/模式`);
-    parts.push(`- 适时做总结，确保来访者跟上`);
-  } else if (ctx.phase === 'summary') {
-    parts.push(`\n【阶段任务：总结收束】`);
-    parts.push(`- 总结本次核心洞察（2-3 点，具体、简洁）`);
-    parts.push(`- 布置具体、可操作的作业`);
-    parts.push(`- 询问来访者对本次会话的反馈`);
-    parts.push(`- 温暖地结束`);
+  if (ctx.phase === 'engagement' || ctx.phase === 'agenda_setting') {
+    parts.push(`\n【后台任务：建立关系】`);
+    parts.push(`- 前 2-3 轮先让来访者感到被听见，不急于解释或建议`);
+    parts.push(`- 反映情绪，澄清事实，抓住一个具体场景`);
+    parts.push(`- 可以温和询问持续时间、影响范围和身体反应`);
+    parts.push(`- 不要说"我们现在进入某个阶段"，阶段只在后台存在`);
+  } else if (ctx.phase === 'assessment' || ctx.phase === 'mood_check') {
+    parts.push(`\n【后台任务：评估与聚焦】`);
+    parts.push(`- 找到最值得处理的一个核心主题，而不是同时处理所有问题`);
+    parts.push(`- 把抽象困扰落到具体场景、自动想法、情绪、行为和身体反应`);
+    parts.push(`- 用问题推进来访者自我发现，避免给结论式判断`);
+    parts.push(`- 继续留意风险信号和功能受损程度`);
+  } else if (ctx.phase === 'intervention' || ctx.phase === 'theme_work') {
+    parts.push(`\n【后台任务：干预工作】`);
+    parts.push(`- 根据材料自然选择 CBT、DBT、ACT、身体觉察或动力学/依恋视角`);
+    parts.push(`- 一次只做一个干预，干预后检查来访者的反应`);
+    parts.push(`- 优先帮助来访者区分想法和事实，或设计一个很小的可执行实验`);
+    parts.push(`- 不要显式标注技术名称，不要输出【认知重构】这类标签`);
+  } else if (ctx.phase === 'closure' || ctx.phase === 'summary') {
+    parts.push(`\n【后台任务：总结与练习】`);
+    parts.push(`- 总结本次 1-2 个核心洞察，具体、克制、不鸡汤`);
+    parts.push(`- 给一个轻量、可执行、低压力的练习`);
+    parts.push(`- 邀请来访者反馈这次对话哪里有用或没用`);
+    parts.push(`- 温暖收束，不制造依赖感`);
   }
 
   return parts.join('\n');

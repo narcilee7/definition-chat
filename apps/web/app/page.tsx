@@ -6,7 +6,7 @@ import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ModeToggle } from "@/components/mode-toggle";
-import { MessageCircle, Shield, ArrowRight, Loader2, Clock } from "lucide-react";
+import { MessageCircle, Shield, ArrowRight, Loader2, Clock, Settings } from "lucide-react";
 
 const QUICK_TOPICS = [
   { label: "焦虑不安", prompt: "最近总是感到焦虑不安，心里七上八下的，不知道怎么回事。" },
@@ -57,7 +57,7 @@ export default function HomePage() {
         presentingProblem: input.trim(),
       });
 
-      router.push(`/chat/${session.sessionId}`);
+      router.push(`/chat/${session.sessionId}?start=1`);
     } catch (err) {
       console.error("Failed to start session:", err);
       setIsLoading(false);
@@ -99,6 +99,9 @@ export default function HomePage() {
             <Button variant="ghost" size="sm" onClick={() => router.push("/safety")}>
               <Shield className="mr-1 h-4 w-4" />
               安全计划
+            </Button>
+            <Button variant="ghost" size="icon" onClick={() => router.push("/settings")} aria-label="设置">
+              <Settings className="h-4 w-4" />
             </Button>
             <ModeToggle />
           </div>

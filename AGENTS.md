@@ -1,8 +1,19 @@
-# OhMe — AI 结构化心理咨询平台
+# OhMe — V5 AI 结构化心理咨询平台
 
-> 不是聊天机器人，是数字疗法。
+> 给 AI Agent 的项目说明。当前方向以 PRD V5 为准：真正的 AI 心理咨询，不是 Lens 玩具，不是自由陪聊。
 
-OhMe 是一个 AI 驱动的心理咨询平台。用户可以选择或构建不同流派（CBT / DBT / ACT / 精神动力学）的 AI 咨询师，通过结构化治疗会话获得专业级心理支持。项目同时包含一个**多视角自我探索系统**（Lens / Refraction），允许用户借用不同解释框架重新理解自己的困境。
+OhMe V5 是一个 AI 驱动的结构化心理咨询平台。用户不再选择 Lens 或显式治疗阶段，而是直接说出困扰；系统在后台完成风险评估、治疗阶段推进、个案概念化、干预技术选择、会话小结、练习沉淀和疗效追踪。
+
+---
+
+## 当前产品原则
+
+1. **直接聊**：首页只有一个主要输入框，快速开始真实困扰。
+2. **治疗结构后台化**：阶段存在于系统里，不作为 clinical UI 暴露给用户。
+3. **第一次对话要有价值**：AI 回复优先让用户感到被理解，再自然进入澄清和干预。
+4. **多流派是治疗师工具**：CBT / DBT / ACT / 精神动力学能力由 AI 自然调用，不让用户选择 Lens。
+5. **每次会话都沉淀资产**：摘要、洞察、作业、情绪线索、个案概念化、疗效指标。
+6. **安全边界优先**：不诊断、不替代真人治疗、不回避危机风险。
 
 ---
 
@@ -10,37 +21,40 @@ OhMe 是一个 AI 驱动的心理咨询平台。用户可以选择或构建不�
 
 | 层级 | 技术 |
 |------|------|
-| 前端 | Next.js 14 (App Router) + React 18 + TypeScript |
+| 前端 | Next.js 14 App Router + React 18 + TypeScript |
 | UI | shadcn/ui + Tailwind CSS + Radix UI + Lucide React |
 | 后端 | NestJS 10 + Prisma ORM |
 | 数据库 | PostgreSQL 14+ |
-| LLM | DeepSeek / SiliconFlow / Groq / OpenRouter（自动降级） |
+| LLM | DeepSeek / SiliconFlow / Groq / OpenRouter / OpenAI-Compatible（自动降级） |
 | 包管理 | pnpm + Turborepo |
-| 测试 | Vitest（单元/集成）+ @testing-library/react + Playwright（E2E 依赖已装，但暂无用例） |
-| 日志 | Pino（后端）+ 自研 Observability 包 |
+| 测试 | Vitest + @testing-library/react |
+| 日志 | Pino + `@ohme/observability` |
 
 ---
 
-## 项目结构（Turborepo Monorepo）
+## 项目结构
 
-```
+```text
 ohme/
 ├── apps/
-│   ├── web/                 # Next.js 14 前端（端口 3000）
-│   └── api/                 # NestJS 10 后端 API（端口 4000）
+│   ├── web/                 # Next.js 前端，端口 3000
+│   └── api/                 # NestJS API，端口 4000
 ├── packages/
-│   ├── agent-framework/     # Agent 运行时：多 Provider LLM、Memory、Tool、Orchestrator、Retry、State Machine、Vector Memory
-│   ├── prompts/             # 五层 Prompt 系统（框架 → 流派 → 个案概念化 → 阶段 → 人格）
-│   ├── types/               # 共享 TypeScript 类型定义
-│   ├── config/              # 共享 ESLint + TSConfig 配置
-│   └── observability/       # 共享日志、链路追踪抽象
+│   ├── agent-framework/     # LLM Provider、Memory、Tool、Retry、Streaming
+│   ├── prompts/             # V5 Prompt + 旧版流派 Prompt
+│   ├── types/               # 共享类型
+│   ├── config/              # ESLint / TSConfig
+│   └── observability/       # 日志、链路追踪抽象
 ├── prisma/
-│   ├── schema.prisma        # 单一 Prisma Schema（PostgreSQL）
-│   ├── migrations/          # Prisma Migrate 历史
-│   └── seed.ts              # 种子数据：默认用户、4 个流派、4 个内置咨询师、安全计划、个案概念化
-├── docs/
-│   └── prodution/           # PRD 与设计文档（PRD_V1.md / PRD_V2.md / PRD_TRANSFORMATION_LENS.md / DESIGN/）
-└── .github/workflows/ci.yml # GitHub Actions CI
+│   ├── schema.prisma
+│   ├── migrations/
+│   └── seed.ts
+└── docs/prodution/PRD/
+    ├── PRD_V5.md            # 当前方向
+    ├── PRD_V4.md            # Lens 旧方向
+    ├── PRD_TRANSFORMATION_LENS.md
+    ├── PRD_V2.md
+    └── PRD_V1.md
 ```
 
 ### Workspace 依赖关系
@@ -48,291 +62,223 @@ ohme/
 - `@ohme/web` 依赖 `@ohme/types`
 - `@ohme/api` 依赖 `@ohme/agent-framework`, `@ohme/observability`, `@ohme/prompts`, `@ohme/types`
 - `@ohme/agent-framework` 依赖 `@ohme/observability`
-- `@ohme/prompts` 无内部运行时依赖（纯 Prompt 文本）
-- `@ohme/config` 被所有包和 app 作为 `devDependencies` 引用
-
----
-
-## 环境配置
-
-1. 复制 `.env.example` 为 `.env`：
-   ```bash
-   cp .env.example .env
-   ```
-
-2. 关键环境变量：
-   - `DATABASE_URL` — PostgreSQL 连接串
-   - `PORT` — API 端口（默认 4000）
-   - `WEB_URL` — 前端地址（默认 http://localhost:3000）
-   - `DEFAULT_LLM_PROVIDER` — 默认 LLM 提供商（`siliconflow` / `deepseek` / `groq` / `openrouter` / `openai-compatible`）
-   - 各 Provider 的 `API_KEY` 和 `MODEL` 变量（至少配一个）
+- `@ohme/prompts` 为纯 Prompt / 编译器包
+- `@ohme/config` 被各 app/package 作为 devDependency 使用
 
 ---
 
 ## 常用命令
 
-所有命令均从项目根目录执行。
-
-### 安装与初始化
+所有命令默认从项目根目录执行。
 
 ```bash
-# 安装所有依赖
 pnpm install
 
-# 生成 Prisma Client
 pnpm db:generate
-
-# 执行数据库迁移
 pnpm db:migrate
+pnpm db:seed
 
-# 填充种子数据
-pnpm db:seed   # 等价于：pnpm exec prisma db seed
-```
-
-### 开发
-
-```bash
-# 同时启动所有 app（前端 + 后端）
-pnpm dev
-
-# 单独启动后端
 pnpm --filter @ohme/api dev
-
-# 单独启动前端
 pnpm --filter @ohme/web dev
-```
 
-开发时前端通过 `next.config.mjs` 中的 `rewrites` 将 `/api/*` 代理到 `http://localhost:4000/api/*`。
+pnpm --filter @ohme/api typecheck
+pnpm --filter @ohme/web typecheck
 
-### 构建
+pnpm --filter @ohme/api test -- --run
+pnpm --filter @ohme/web test -- --run
 
-```bash
-# 构建全部（Turborepo 会按依赖拓扑排序）
-pnpm build
-
-# 单独构建
 pnpm --filter @ohme/api build
 pnpm --filter @ohme/web build
 ```
 
-Web 使用 `output: 'standalone'` 模式打包。
+开发时前端通过 Next rewrites 将 `/api/*` 代理到 `http://localhost:4000/api/*`。
 
-### 测试
-
-```bash
-# 运行所有测试
-pnpm test
-
-# 前端测试（Vitest + jsdom）
-pnpm --filter @ohme/web test
-pnpm --filter @ohme/web test:watch
-
-# 后端测试（Vitest + node）
-pnpm --filter @ohme/api test
-pnpm --filter @ohme/api test:watch
-```
-
-测试文件命名：
-- Web：`*.spec.ts`, `*.spec.tsx`, `*.test.ts`, `*.test.tsx`
-- API：`src/**/*.spec.ts`, `src/**/*.test.ts`
-
-### 代码检查与格式化
+修改 Prisma schema 后必须执行：
 
 ```bash
-# 类型检查全部
-pnpm typecheck
-
-# Lint 全部
-pnpm lint
-
-# 格式化全部（Prettier）
-pnpm format
+pnpm db:generate
+pnpm db:migrate
 ```
+
+当前 V5 已新增 `session_summary` / `summary_generated_at` 迁移，拉取后需要跑 `pnpm db:migrate`。
 
 ---
 
-## 代码风格指南
+## 环境变量
 
-- **语言**：TypeScript，严格模式开启（`strict: true`）。
-- **格式化**：Prettier，配置见 `.prettierrc`：
+- `DATABASE_URL`：PostgreSQL 连接串。
+- `PORT`：API 端口，默认 4000。
+- `WEB_URL`：前端地址，默认 `http://localhost:3000`。
+- `DEFAULT_LLM_PROVIDER`：`siliconflow` / `deepseek` / `groq` / `openrouter` / `openai-compatible`。
+- 至少配置一个 Provider API Key，如 `DEEPSEEK_API_KEY`、`SILICONFLOW_API_KEY`、`GROQ_API_KEY`、`OPENROUTER_API_KEY`。
+
+---
+
+## V5 前端信息架构
+
+| 路由 | 状态 | 功能 |
+|------|------|------|
+| `/` | V5 主入口 | 直接输入困扰并创建治疗会话 |
+| `/chat/[sessionId]` | V5 核心 | 流式治疗对话、帮助感评分、结束本次并生成小结 |
+| `/progress` | V5 核心 | 治疗档案、情绪追踪、量表趋势、洞察、练习、摘要 |
+| `/assess` | V5 核心 | PHQ-9 / GAD-7，支持 `?type=PHQ-9` |
+| `/safety` | V5 核心 | 安全计划与危机资源 |
+| `/settings` | V5 核心 | 服务边界、隐私说明、数据导出、危机热线 |
+| `/reflect` | 废弃 | 重定向到首页 |
+| `/explore` | 废弃 | 重定向到首页 |
+| `/lenses` | 废弃 | 重定向到首页 |
+| `/lenses/build` | 废弃 | 重定向到首页 |
+| `/model` | 废弃 | 重定向到 `/progress` |
+| `/build` | 旧功能 | 咨询师 Builder，暂保留 |
+| `/chat/new` | 旧功能 | 新建治疗会话旧入口，主路径不依赖 |
+
+新增页面请使用 App Router，放在 `apps/web/app/`；可复用组件放 `apps/web/components/`；业务客户端封装放 `apps/web/lib/api.ts`。
+
+---
+
+## 后端模块
+
+| 模块 | 职责 |
+|------|------|
+| `ChatModule` | V5 治疗对话、SSE、会话完成、治疗资产生成 |
+| `TherapyModule` | 后台会话状态、Prompt 构建 |
+| `CaseFormulationModule` | 个案概念化版本管理 |
+| `RiskModule` | 风险检测、危机干预 |
+| `SafetyModule` | 安全计划 |
+| `AssessmentModule` | PHQ-9 / GAD-7 |
+| `SessionsModule` | 会话列表、反馈、情绪 check-in、练习完成 |
+| `AgentsModule` | 咨询师人格 CRUD |
+| `BuilderModule` | 自定义咨询师 Builder |
+| `InsightModule` | 旧洞察引擎，部分测试保留 |
+| `RefractionModule` / `ExploreModule` / `LensModule` / `SelfModelModule` | V4 遗留，暂保留但不作为 V5 主路径 |
+| `PrismaModule` | 数据库连接 |
+| `LLMModule` / `LLMFallbackService` | 多 Provider LLM 自动降级 |
+
+新增 API 端点时遵循 NestJS `Controller + Service + Module` 分层；如新增模块，需要在 `apps/api/src/app.module.ts` 注册。
+
+---
+
+## 关键 V5 API
+
+### Therapy Chat
+
+- `POST /api/therapy/sessions`：创建治疗会话。
+- `GET /api/therapy/sessions/:id`：读取会话状态与消息。
+- `POST /api/therapy/chat`：非流式治疗对话。
+- `POST /api/therapy/chat/stream`：SSE 流式治疗对话。
+- `POST /api/therapy/sessions/:id/complete`：结束本次会话并强制生成小结/洞察/练习/概念化。
+- `POST /api/therapy/sessions/:id/phase`：后台阶段设置，主要用于调试。
+
+### Session Record
+
+- `GET /api/sessions?userId=default`：会话列表。
+- `POST /api/sessions/:id/feedback`：提交帮助感评分。
+- `POST /api/sessions/:id/mood`：提交 0-10 分情绪 check-in。
+- `PATCH /api/sessions/:id/homework/:index`：更新练习完成状态。
+
+### Treatment Record
+
+- `GET /api/case-formulations/:userId/latest`：最新个案概念化。
+- `POST /api/assessments`：提交 PHQ-9 / GAD-7。
+- `GET /api/assessments/trend?type=PHQ-9&userId=default`：量表趋势。
+- `GET /api/safety-plans/:userId` / `POST /api/safety-plans/:userId`：安全计划。
+
+---
+
+## 数据库重点
+
+- `TherapySession.phase`：V5 后台阶段，`engagement / assessment / intervention / closure`。
+- `TherapySession.presentingProblem`：用户首次输入的主诉。
+- `TherapySession.sessionSummary` / `summaryGeneratedAt`：会话小结。
+- `TherapySession.insights`：核心洞察。
+- `TherapySession.homework`：轻量练习，含 `completed` / `completedAt` / `reflection`。
+- `TherapySession.skillsIntroduced`：后台统计使用过的技术。
+- `TherapySession.allianceRating`：用户主观帮助感，1-5 分。
+- `TherapySession.postMood`：情绪追踪 JSON，约定包含：
+  - `extracted`：AI 后台提取的心情、焦虑、压力、睡眠、食欲线索。
+  - `selfReport`：用户手动 check-in。
+- `SessionMessage.interventionType` / `techniqueUsed`：后台干预标注，前台不显式展示技术标签。
+- `CaseFormulation`：动态个案概念化版本。
+- `Assessment`：PHQ-9 / GAD-7。
+- `SafetyPlan` / `CrisisLog`：安全计划与危机记录。
+
+不要随意改 `prisma/seed.ts` 的内置流派和咨询师结构，除非 PRD 明确要求。内置咨询师 ID 格式为 `builtin-{name}`。
+
+---
+
+## Prompt 系统
+
+V5 主路径在 `packages/prompts/src/v5/`：
+
+- `therapist.ts`：整合取向治疗师核心 Prompt、后台阶段感知、个案概念化注入、人格风格注入。
+- `compiler.ts`：V5 System Prompt 编译与压缩。
+
+V5 Prompt 是“一层整合治疗师 Prompt + 动态注入块”，不要把用户体验退回旧 V2 的显性五层阶段 UI。
+
+旧版 CBT / DBT / ACT / 精神动力学协议仍保留，主要用于种子数据和后续技术库迁移。
+
+---
+
+## 代码风格
+
+- TypeScript 严格模式。
+- Prettier：
   - `semi: true`
   - `singleQuote: true`
   - `trailingComma: "all"`
   - `printWidth: 100`
   - `tabWidth: 2`
-- **Lint**：ESLint，分层配置在 `packages/config/`：
-  - `eslint-base.js` — 通用规则（prettier、@typescript-eslint）
-  - `eslint-next.js` — 前端额外继承 `next/core-web-vitals`
-  - `eslint-nest.js` — 后端额外关闭 Nest 常用宽松规则
-- **未使用变量**：`@typescript-eslint/no-unused-vars` 设为 error，但允许 `_` 前缀的变量/参数被忽略。
-- **any**：尽量避免。基础规则对 `any` 是 warn（Web）或 off（Nest，测试友好）。
-- **注释与文档**：项目中大量注释和文档使用**中文**。新增功能时请保持中文注释习惯，尤其是面向业务领域（心理咨询流派、干预技术、风险评估）的说明。
-
----
-
-## 数据库（Prisma + PostgreSQL）
-
-- **单一 Schema 源**：`prisma/schema.prisma`，所有应用共用。
-- **Prisma Client 生成**：在 `apps/api` 中执行 `pnpm db:generate`，会读取 `../../prisma/schema.prisma`。
-- **迁移**：`pnpm db:migrate`（同样基于根目录的 schema）。
-- **Studio**：`pnpm db:studio`
-- **核心模型**：
-  - `User` / `UserProfile` — 用户与档案
-  - `TherapyApproach` — 治疗流派（CBT、DBT、ACT、精神动力学）
-  - `TherapistPersona` — 咨询师人格（内置 + 用户自定义）
-  - `TherapySession` / `SessionMessage` — 治疗会话与消息
-  - `CaseFormulation` — 个案概念化（五因素模型、核心信念、治疗目标）
-  - `Assessment` — 量表评估（PHQ-9、GAD-7 等）
-  - `SafetyPlan` / `CrisisLog` — 安全计划与危机日志
-
----
-
-## 后端架构（NestJS）
-
-### 模块划分
-
-| 模块 | 职责 |
-|------|------|
-| `TherapyModule` | 会话管理、阶段管理、Prompt 构建 |
-| `ChatModule` | 治疗对话（普通 + SSE Stream） |
-| `AgentsModule` | 咨询师人格 CRUD |
-| `CaseFormulationModule` | 个案概念化 |
-| `RiskModule` | 风险检测、危机干预 |
-| `SafetyModule` | 安全计划 |
-| `AssessmentModule` | 量表（PHQ-9 / GAD-7） |
-| `RefractionModule` | 多 Lens 折射分析 |
-| `ExploreModule` | 单 Lens 深度探索 |
-| `BuilderModule` | 自定义咨询师 Builder |
-| `InsightModule` | 洞察引擎 |
-| `SessionsModule` | 基础会话管理 |
-| `PrismaModule` | 数据库连接 |
-| `LLMModule` / `LLMFallbackService` | LLM Provider 工厂 + 自动降级 |
-
-### 关键设计
-
-- **全局异常过滤**：`AllExceptionsFilter` + Pino Logger
-- **Pino 替换 Nest 默认 Logger**：`nestjs-pino` + `LoggerErrorInterceptor`
-- **CORS**：允许 `WEB_URL` 来源
-- **ValidationPipe**：`whitelist: true, transform: true`
-- **API 前缀**：所有路由带 `/api` 前缀
-
----
-
-## 前端架构（Next.js 14 App Router）
-
-### 目录约定
-
-- `app/` — 页面路由（App Router）
-- `components/` — React 组件（含 `components/ui/` 为 shadcn/ui 组件）
-- `hooks/` — 自定义 React Hooks
-- `lib/` — 工具函数、API 客户端、业务逻辑
-- `test/setup.ts` — Vitest 初始化（引入 `@testing-library/jest-dom/vitest`）
-
-### 关键页面
-
-| 路由 | 功能 |
-|------|------|
-| `/` | 首页：多视角自我探索（Lens 选择与折射） |
-| `/reflect` | 折射结果页 |
-| `/lenses` | Lens 库 |
-| `/lenses/build` | 自定义 Lens Builder |
-| `/chat/new` | 新建治疗会话 |
-| `/chat/[sessionId]` | 结构化治疗对话 |
-| `/assess` | 量表评估 |
-| `/progress` | 症状趋势 |
-| `/safety` | 安全计划 |
-| `/model` | Self Model |
-| `/explore` | 探索页 |
-| `/build` | 咨询师 Builder |
-
-### API 客户端
-
-`lib/api.ts` 封装了所有后端接口的 fetch 调用，按领域分组（`sessions`, `therapy`, `personas`, `assessments`, `safety`, `refraction`, `explore`, `builder`）。
-
-### 前端代理
-
-开发模式下，`next.config.mjs` 将 `/api/*` rewrite 到 `http://localhost:4000/api/*`，因此前端代码中调用 `/api/xxx` 即可。
-
----
-
-## Agent Framework（`packages/agent-framework`）
-
-这是一个自研的轻量级 Agent 运行时，核心能力：
-
-- **多 Provider LLM**：SiliconFlow、DeepSeek、Groq、OpenRouter、OpenAI-Compatible，统一接口 + 自动降级
-- **Memory**：BufferMemory、WindowMemory、SQLiteMemory、VectorMemoryStore（基于余弦相似度）
-- **Tools**：ToolRegistry + ToolExecutor，内置工具（currentTime、calculator、searchMemory、webSearch）
-- **Orchestrator**：并行执行、顺序执行、辩论模式
-- **Retry**：指数退避重试 + 熔断器（CircuitBreaker）
-- **State Machine**：AgentStateMachine + AgentLifecycle
-- **Structured Output**：JSON Schema 约束生成
-- **Streaming**：SSE 流解析
-
-该包被后端 `@ohme/api` 直接依赖，用于驱动所有 LLM 交互。
-
----
-
-## 五层 Prompt 系统（`packages/prompts`）
-
-```
-Layer 1: 基础治疗框架（所有流派共享）
-    ↓
-Layer 2: 流派特定协议（CBT / DBT / ACT / 精神动力学）
-    ↓
-Layer 3: 个案概念化注入（动态更新）
-    ↓
-Layer 4: 会话阶段指令（agenda_setting / mood_check / theme_work / summary）
-    ↓
-Layer 5: 人格微调（Persona 风格参数）
-```
-
-由 `PromptBuilderService` 在运行时逐层编译为最终 System Prompt。
+- 未使用变量是 error，但 `_` 前缀变量/参数允许忽略。
+- 新增业务文案、Prompt、领域注释优先中文。
+- 前端 UI 用 shadcn/ui + Tailwind + Lucide React；按钮优先用图标表达明确动作。
+- 不要在前台暴露“当前阶段：评估/干预”等 clinical UI。
+- 不要在 AI 回复下方显示技术标签；技术只用于后台统计。
 
 ---
 
 ## 测试策略
 
-### 单元测试 / 集成测试（Vitest）
+- Web：Vitest + jsdom + Testing Library。
+- API：Vitest + node。
+- Playwright 已安装但目前无 E2E 用例。
+- CI 当前只运行类型检查和构建，不运行测试。
 
-- **Web**：Vitest + `@vitejs/plugin-react` + `jsdom` + `@testing-library/react`。覆盖率 provider 为 `v8`。
-- **API**：Vitest + `node` 环境。测试文件放在 `src/**/*.spec.ts` 或 `test/integration/*.spec.ts`。`test/setup.ts` 导入 `reflect-metadata` 以支持 NestJS 装饰器。
-- **共享包**：目前未配置独立测试运行器，逻辑通常由引用方测试覆盖。
+推荐在完成 V5 相关改动后至少执行：
 
-### E2E
-
-- 已安装 `@playwright/test`，但 `apps/web/e2e/` 目录下**暂无测试用例**。
-
-### CI（GitHub Actions）
-
-`.github/workflows/ci.yml` 在 `push` 和 `pull_request` 到 `main` 时触发：
-
-1. checkout
-2. setup Node 20 + pnpm 9
-3. `pnpm install --frozen-lockfile`
-4. `pnpm --filter @ohme/types build`（必须先构建共享包）
-5. `prisma generate`
-6. `pnpm --filter @ohme/api typecheck && build`
-7. `pnpm --filter @ohme/web typecheck && build`
-
-> CI 中**不运行测试**，只执行构建和类型检查。
+```bash
+pnpm --filter @ohme/api typecheck
+pnpm --filter @ohme/api test -- --run
+pnpm --filter @ohme/api build
+pnpm --filter @ohme/web typecheck
+pnpm --filter @ohme/web test -- --run
+pnpm --filter @ohme/web build
+```
 
 ---
 
 ## 安全与合规
 
-- **隐私**：`User` 模型包含 `consentGiven`、`consentAt`、`dataRetention` 字段，用于合规追踪。
-- **风险评估**：每次对话实时风险检测，5 级分级（none → imminent）。检测到高危时触发危机干预话术。
-- **安全计划**：标准 CBT 五步安全计划（warningSigns、 copingStrategies、distractions、supportPeople、professionals）。
-- **免责声明**：OhMe 提供的是心理支持和结构化自助工具，**不是医疗诊断或治疗**。所有内置咨询师的 System Prompt 都包含 "不替代医学诊断" 的边界。
-- **危机热线**：种子数据内置了中国大陆常用心理危机热线（希望 24 热线、北京心理危机干预中心）。
+- OhMe 提供心理支持和结构化自助，不提供医疗诊断、处方或紧急救援。
+- 危机风险高时，优先触发危机干预话术和热线资源。
+- `User` 模型已有 `consentGiven`、`consentAt`、`dataRetention` 字段，但真实用户同意流程尚未接入。
+- `/settings` 提供服务边界、隐私说明和 JSON 数据导出。
+- 上线前必须补齐真实账号、同意记录、删除流程、数据保留策略、地区化危机资源。
+
+危机资源：
+
+- 全国希望 24 热线：`400-161-9995`
+- 北京心理危机干预中心：`010-82951332`
+- 紧急情况：`120` / `110`
 
 ---
 
 ## 给 AI Agent 的额外提示
 
-1. **不要修改 Seed 数据里的流派结构**（`prisma/seed.ts`）除非有明确的 PRD 变更。内置咨询师的 ID 格式为 `builtin-{name}`（如 `builtin-理性之眼`）。
-2. **新增 API 端点**时，请在 `apps/api/src/app.module.ts` 中注册对应 Module，并遵循 NestJS 的 `Controller` + `Service` + `Module` 分层。
-3. **新增前端页面**时，使用 App Router（`app/` 目录），组件放在 `components/`，共享逻辑放在 `lib/` 或 `hooks/`。
-4. **修改 Prisma Schema**后，必须运行 `pnpm db:generate` 和 `pnpm db:migrate`，并检查 `prisma/seed.ts` 是否需要同步更新。
-5. **共享包变更**后，需要先构建（`pnpm --filter @ohme/types build` 等），下游应用才能识别新类型。Turborepo 的 `build` task 已配置 `dependsOn: ["^build"]`，根目录 `pnpm build` 会自动处理拓扑。
-6. **中文优先**：业务注释、Prompt 文本、用户可见文案均以中文为主。技术实现注释可用英文，但涉及心理咨询领域概念时请用中文以便团队成员理解。
+1. 当前产品方向以 `docs/prodution/PRD/PRD_V5.md` 为准。
+2. 不要重新强化 V4 Lens / Refraction / Exploration 主路径；这些是遗留模块。
+3. 新增前端页面时使用 App Router，组件放 `components/`，客户端 API 放 `lib/api.ts`。
+4. 修改 Prisma Schema 后必须运行 `pnpm db:generate` 和 `pnpm db:migrate`，并检查 seed 是否需要同步。
+5. 共享包变更后先构建上游包或运行根构建，避免下游类型未更新。
+6. 治疗领域文本、Prompt、用户可见文案优先中文。
+7. 对心理健康安全相关改动保持保守：不诊断、不承诺疗效、不弱化危机提示。
+8. 工作区可能已有用户未提交改动，修改前先查看 `git status`，不要覆盖无关变更。

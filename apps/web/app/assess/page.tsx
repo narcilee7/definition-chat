@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -33,7 +33,22 @@ interface Result {
 }
 
 export default function AssessPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center bg-background">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      }
+    >
+      <AssessPageContent />
+    </Suspense>
+  );
+}
+
+function AssessPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [scaleType, setScaleType] = useState<string | null>(null);
   const [scaleData, setScaleData] = useState<ScaleData | null>(null);
   const [responses, setResponses] = useState<Record<string, number>>({});
@@ -44,6 +59,13 @@ export default function AssessPage() {
   useEffect(() => {
     api.assessments.list().then(setHistory).catch(console.error);
   }, []);
+
+  useEffect(() => {
+    const type = searchParams.get("type");
+    if ((type === "PHQ-9" || type === "GAD-7") && !scaleType && !scaleData) {
+      void loadScale(type);
+    }
+  }, [searchParams, scaleType, scaleData]);
 
   const loadScale = async (type: string) => {
     setIsLoading(true);
@@ -236,7 +258,7 @@ export default function AssessPage() {
 
             <div className="flex gap-3">
               <Button variant="outline" onClick={() => setScaleType(null)} className="flex-1">返回量表列表</Button>
-              <Button onClick={() => router.push("/")} className="flex-1">回到首页</Button>
+              <Button onClick={() => router.push("/progress")} className="flex-1">查看治疗档案</Button>
             </div>
           </div>
         )}

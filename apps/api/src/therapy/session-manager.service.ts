@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { createLogger } from '@ohme/observability';
 import { PrismaService } from '../prisma/prisma.service';
 
-export type SessionPhase = 'agenda_setting' | 'mood_check' | 'theme_work' | 'summary';
+export type SessionPhase = 'engagement' | 'assessment' | 'intervention' | 'closure';
 
 export interface SessionState {
   sessionId: string;
@@ -32,7 +32,7 @@ export class SessionManagerService {
         userId,
         therapistId,
         sessionNumber: existingCount + 1,
-        phase: 'active',
+        phase: 'engagement',
         presentingProblem,
         agenda: [],
         riskLevel: 'none',
@@ -44,7 +44,7 @@ export class SessionManagerService {
 
     const state: SessionState = {
       sessionId: session.id,
-      phase: 'agenda_setting',
+      phase: 'engagement',
       agenda: [],
       homework: [],
       insights: [],
@@ -71,11 +71,7 @@ export class SessionManagerService {
 
     const state: SessionState = {
       sessionId: session.id,
-      phase: (session.agenda as any[])?.length > 0 && (session.agenda as any[]).every((a) => a.status === 'completed')
-        ? 'summary'
-        : (session.agenda as any[])?.length > 0
-          ? 'theme_work'
-          : 'agenda_setting',
+      phase: this.normalizePhase(session.phase),
       agenda: (session.agenda as any[]) || [],
       homework: (session.homework as any[]) || [],
       insights: session.insights || [],
@@ -91,7 +87,7 @@ export class SessionManagerService {
     const state = this.sessionStates.get(sessionId);
     if (!state) return null;
 
-    const phaseOrder: SessionPhase[] = ['agenda_setting', 'mood_check', 'theme_work', 'summary'];
+    const phaseOrder: SessionPhase[] = ['engagement', 'assessment', 'intervention', 'closure'];
     const currentIdx = phaseOrder.indexOf(state.phase);
     if (currentIdx < phaseOrder.length - 1) {
       state.phase = phaseOrder[currentIdx + 1];
@@ -131,6 +127,7 @@ export class SessionManagerService {
     const state = this.sessionStates.get(sessionId);
     if (!state) return null;
 
+    if (state.insights.includes(insight)) return state;
     state.insights.push(insight);
     return state;
   }
@@ -139,6 +136,7 @@ export class SessionManagerService {
     const state = this.sessionStates.get(sessionId);
     if (!state) return null;
 
+    if (state.skillsIntroduced.includes(skill)) return state;
     state.skillsIntroduced.push(skill);
     return state;
   }
@@ -163,9 +161,28 @@ export class SessionManagerService {
         insights: state.insights,
         skillsIntroduced: state.skillsIntroduced,
         riskLevel: state.riskLevel,
+        phase: state.phase,
       },
     });
 
     this.logger.info('Session state persisted', { sessionId });
+  }
+
+  private normalizePhase(phase: string): SessionPhase {
+    const v5Phases: SessionPhase[] = ['engagement', 'assessment', 'intervention', 'closure'];
+    if (v5Phases.includes(phase as SessionPhase)) return phase as SessionPhase;
+
+    const legacyMap: Record<string, SessionPhase> = {
+      agenda_setting: 'engagement',
+      mood_check: 'assessment',
+      theme_work: 'intervention',
+      summary: 'closure',
+      active: 'engagement',
+      intake: 'engagement',
+      maintenance: 'intervention',
+      termination: 'closure',
+    };
+
+    return legacyMap[phase] || 'engagement';
   }
 }

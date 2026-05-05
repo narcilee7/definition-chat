@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { vi } from 'vitest';
 import { SessionsService } from './sessions.service';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -14,12 +15,12 @@ describe('SessionsService', () => {
           provide: PrismaService,
           useValue: {
             therapySession: {
-              findMany: jest.fn(),
-              findUnique: jest.fn(),
-              update: jest.fn(),
+              findMany: vi.fn(),
+              findUnique: vi.fn(),
+              update: vi.fn(),
             },
             sessionMessage: {
-              create: jest.fn(),
+              create: vi.fn(),
             },
           },
         },
@@ -37,7 +38,7 @@ describe('SessionsService', () => {
   describe('findAll', () => {
     it('should return all sessions', async () => {
       const mockSessions = [{ id: '1', sessionNumber: 1 }];
-      jest.spyOn(prisma.therapySession, 'findMany').mockResolvedValue(mockSessions as any);
+      vi.spyOn(prisma.therapySession, 'findMany').mockResolvedValue(mockSessions as any);
 
       const result = await service.findAll();
       expect(result).toEqual(mockSessions);

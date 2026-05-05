@@ -57,6 +57,9 @@ export class PromptBuilderService {
         ? insights
         : await this.extractInsights(sessionId);
 
+    const effectivePreviousSessionSummary =
+      previousSessionSummary ?? (await this.findPreviousSessionSummary(userId, sessionId));
+
     // 4. 构建 V5 编译选项
     const compileOptions: V5CompileOptions = {
       sessionNumber,
@@ -64,7 +67,7 @@ export class PromptBuilderService {
       presentingProblem,
       agenda,
       homeworkReview,
-      previousSessionSummary,
+      previousSessionSummary: effectivePreviousSessionSummary,
       previousInsights: previousInsights.length > 0 ? previousInsights : undefined,
       skillsIntroduced: skillsIntroduced && skillsIntroduced.length > 0 ? skillsIntroduced : undefined,
       persona: {
@@ -133,5 +136,29 @@ export class PromptBuilderService {
     }
 
     return insights.slice(-3); // 只取最近 3 个
+  }
+
+  /**
+   * 找到最近一次已有摘要的治疗会话，作为治疗记忆注入。
+   */
+  private async findPreviousSessionSummary(userId: string, currentSessionId: string): Promise<string | undefined> {
+    const current = await this.prisma.therapySession.findUnique({
+      where: { id: currentSessionId },
+      select: { createdAt: true },
+    });
+    if (!current) return undefined;
+
+    const previous = await this.prisma.therapySession.findFirst({
+      where: {
+        userId,
+        id: { not: currentSessionId },
+        sessionSummary: { not: null },
+        createdAt: { lt: current.createdAt },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { sessionSummary: true },
+    });
+
+    return previous?.sessionSummary ?? undefined;
   }
 }

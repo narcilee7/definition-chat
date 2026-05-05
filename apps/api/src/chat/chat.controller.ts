@@ -29,10 +29,7 @@ export class ChatController {
     const session = await this.sessionManager.getSessionState(id);
     if (!session) return { error: 'Session not found' };
 
-    const dbSession = await this.chatService['prisma'].therapySession.findUnique({
-      where: { id },
-      include: { therapist: { include: { approach: true } }, messages: { orderBy: { createdAt: 'asc' } } },
-    });
+    const dbSession = await this.chatService.getSessionWithMessages(id);
 
     return { ...session, ...dbSession };
   }
@@ -75,5 +72,16 @@ export class ChatController {
     if (!state) return { error: 'Session not found' };
     await this.sessionManager.persistSession(id);
     return { phase: state.phase };
+  }
+
+  @Post('sessions/:id/complete')
+  async completeSession(@Param('id') id: string) {
+    try {
+      return await this.chatService.completeSession(id);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Complete session failed';
+      this.logger.error('Complete session failed', { sessionId: id, error: err });
+      return { error: msg };
+    }
   }
 }
