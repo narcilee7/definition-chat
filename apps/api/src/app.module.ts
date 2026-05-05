@@ -14,6 +14,7 @@ import { SafetyModule } from './safety/safety.module';
 import { RefractionModule } from './refraction/refraction.module';
 import { AgentsModule } from './agents/agents.module';
 import { AgentLoaderService } from './agent-loader.service';
+import { ExploreModule } from './explore/explore.module';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { AgentLoaderService } from './agent-loader.service';
     AssessmentModule,
     SafetyModule,
     RefractionModule,
+    ExploreModule,
   ],
   providers: [AgentLoaderService],
 })

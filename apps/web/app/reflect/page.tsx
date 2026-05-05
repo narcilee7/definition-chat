@@ -183,8 +183,17 @@ export default function ReflectPage() {
                     </CardHeader>
                     <CardContent className="space-y-4">
                       <div className="whitespace-pre-wrap text-sm leading-7">{result.content}</div>
-                      <Button variant="outline" className="w-full" disabled>
-                        深潜待接入
+                      <Button
+                        variant="outline"
+                        className="w-full"
+                        onClick={() => {
+                          const params = new URLSearchParams();
+                          params.set("question", question);
+                          params.set("lens", result.lensId);
+                          router.push(`/explore?${params.toString()}`);
+                        }}
+                      >
+                        继续深潜
                       </Button>
                     </CardContent>
                   </Card>
