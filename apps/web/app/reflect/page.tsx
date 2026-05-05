@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ModeToggle } from "@/components/mode-toggle";
-import { findLens, LENS_OPTIONS } from "@/lib/lenses";
+import { findLens, getAllLensOptions, getCustomLensPayload, LensOption } from "@/lib/lenses";
 import { ArrowLeft, Loader2, RotateCcw, Sparkles } from "lucide-react";
 
 interface LensRefractionResult {
@@ -20,6 +20,7 @@ interface LensRefractionResult {
 export default function ReflectPage() {
   const router = useRouter();
   const [question, setQuestion] = useState("");
+  const [lensOptions, setLensOptions] = useState<LensOption[]>([]);
   const [selectedLensIds, setSelectedLensIds] = useState<string[]>([
     "cognitive-judgment",
     "relationship-pattern",
@@ -30,6 +31,7 @@ export default function ReflectPage() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+    setLensOptions(getAllLensOptions());
     const questionParam = params.get("question");
     const lensesParam = params.get("lenses");
     let nextLensIds = selectedLensIds;
@@ -50,6 +52,7 @@ export default function ReflectPage() {
           userId: "default",
           question: questionParam,
           lensIds: nextLensIds,
+          customLenses: getCustomLensPayload(nextLensIds),
         })
         .then(setResults)
         .catch(console.error)
@@ -74,6 +77,7 @@ export default function ReflectPage() {
         userId: "default",
         question: question.trim(),
         lensIds: selectedLensIds,
+        customLenses: getCustomLensPayload(selectedLensIds),
       });
       setResults(response);
     } catch (error) {
@@ -128,7 +132,7 @@ export default function ReflectPage() {
                 <span className="text-xs text-muted-foreground">已选择 {selectedLensIds.length} 个</span>
               </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                {LENS_OPTIONS.map((lens) => {
+                {lensOptions.map((lens) => {
                   const selected = selectedLensIds.includes(lens.id);
                   return (
                     <button
@@ -142,6 +146,11 @@ export default function ReflectPage() {
                       <div className="mb-1 flex items-center gap-2">
                         <span className={`h-2.5 w-2.5 rounded-full ${lens.color}`} />
                         <span className="text-sm font-medium">{lens.name}</span>
+                        {lens.isCustom && (
+                          <span className="rounded-full bg-fuchsia-500/10 px-2 py-0.5 text-[10px] text-fuchsia-700 dark:text-fuchsia-300">
+                            自定义
+                          </span>
+                        )}
                       </div>
                       <p className="text-xs leading-5 text-muted-foreground">{lens.shortDescription}</p>
                     </button>

@@ -1,17 +1,18 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ModeToggle } from "@/components/mode-toggle";
-import { LENS_OPTIONS } from "@/lib/lenses";
+import { getAllLensOptions, LensOption } from "@/lib/lenses";
 import { ArrowRight, Compass, Library, NotebookText, ScanLine, Sparkles, Wand2 } from "lucide-react";
 
 export default function HomePage() {
   const router = useRouter();
   const [question, setQuestion] = useState("");
+  const [lensOptions, setLensOptions] = useState<LensOption[]>([]);
   const [selectedLensIds, setSelectedLensIds] = useState<string[]>([
     "cognitive-judgment",
     "relationship-pattern",
@@ -25,6 +26,10 @@ export default function HomePage() {
     if (selectedCount === 0) return "选择至少一个视角";
     return `已选择 ${selectedCount} 个视角`;
   }, [selectedCount]);
+
+  useEffect(() => {
+    setLensOptions(getAllLensOptions());
+  }, []);
 
   const toggleLens = (id: string) => {
     setSelectedLensIds((prev) =>
@@ -53,9 +58,9 @@ export default function HomePage() {
               <NotebookText className="mr-1 h-4 w-4" />
               Self Model
             </Button>
-            <Button variant="ghost" size="sm" disabled>
+            <Button variant="ghost" size="sm" onClick={() => router.push("/lenses/build")}>
               <Wand2 className="mr-1 h-4 w-4" />
-              Build Lens 待接入
+              Build Lens
             </Button>
             <ModeToggle />
           </div>
@@ -104,12 +109,12 @@ export default function HomePage() {
           <section className="space-y-3">
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-medium text-muted-foreground">选择你想借用的视角</h2>
-              <Button variant="ghost" size="sm" onClick={() => setSelectedLensIds(LENS_OPTIONS.map((lens) => lens.id))}>
+              <Button variant="ghost" size="sm" onClick={() => setSelectedLensIds(lensOptions.map((lens) => lens.id))}>
                 全选
               </Button>
             </div>
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              {LENS_OPTIONS.map((lens) => {
+              {lensOptions.map((lens) => {
                 const selected = selectedLensIds.includes(lens.id);
                 return (
                   <button
@@ -123,6 +128,11 @@ export default function HomePage() {
                     <div className="mb-2 flex items-center gap-2">
                       <span className={`h-2.5 w-2.5 rounded-full ${lens.color}`} />
                       <span className="font-medium">{lens.name}</span>
+                      {lens.isCustom && (
+                        <span className="rounded-full bg-fuchsia-500/10 px-2 py-0.5 text-[10px] text-fuchsia-700 dark:text-fuchsia-300">
+                          自定义
+                        </span>
+                      )}
                     </div>
                     <p className="text-sm leading-6 text-muted-foreground">{lens.shortDescription}</p>
                     <div className="mt-3 flex flex-wrap gap-1.5">

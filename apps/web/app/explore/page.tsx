@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
-import { findLens } from "@/lib/lenses";
+import { findLens, getCustomLensPayload } from "@/lib/lenses";
 import { extractNewInterpretation, saveSelfModelEntry } from "@/lib/self-model";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -43,7 +43,7 @@ export default function ExplorePage() {
     if (questionParam) {
       setIsStarting(true);
       api.explore
-        .run({ lensId: lensParam, question: questionParam })
+        .run({ lensId: lensParam, question: questionParam, customLens: getCustomLensPayload([lensParam])[0] })
         .then(setStartResult)
         .catch(console.error)
         .finally(() => setIsStarting(false));
@@ -60,6 +60,7 @@ export default function ExplorePage() {
         question,
         userResponse,
         hypothesis: startResult?.content,
+        customLens: getCustomLensPayload([lensId])[0],
       });
       setCompleteResult(result);
       setSavedEntryId(null);

@@ -1,13 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { createLogger } from '@ohme/observability';
 import { LLMFallbackService } from '../llm/llm-fallback.service';
-import { findLens, LENSES, LensDefinition } from '../lenses/lens-definitions';
+import { findLensFromRequest, LENSES, LensDefinition } from '../lenses/lens-definitions';
 
 export interface RefractionRequest {
   userId: string;
   question: string;
   lensIds?: string[];
   approachIds?: string[];
+  customLenses?: unknown[];
 }
 
 export interface RefractionResult {
@@ -27,7 +28,7 @@ export class RefractionService {
     const { userId, question } = data;
     const selectedIds = data.lensIds ?? data.approachIds ?? ['cognitive-judgment', 'relationship-pattern', 'values'];
     const selectedLenses = selectedIds
-      .map((id) => findLens(id))
+      .map((id) => findLensFromRequest(id, data.customLenses))
       .filter((lens): lens is LensDefinition => Boolean(lens));
 
     const lenses = selectedLenses.length > 0 ? selectedLenses : LENSES.slice(0, 3);

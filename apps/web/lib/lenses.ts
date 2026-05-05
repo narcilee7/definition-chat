@@ -6,6 +6,12 @@ export interface LensOption {
   bg: string;
   domains: string[];
   sees: string[];
+  ignores?: string[];
+  explainsPainAs?: string;
+  coreQuestions?: string[];
+  explorationMoves?: string[];
+  risks?: string[];
+  isCustom?: boolean;
 }
 
 export const LENS_OPTIONS: LensOption[] = [
@@ -66,5 +72,71 @@ export const LENS_OPTIONS: LensOption[] = [
 ];
 
 export function findLens(id: string): LensOption | undefined {
-  return LENS_OPTIONS.find((lens) => lens.id === id);
+  return getAllLensOptions().find((lens) => lens.id === id);
+}
+
+const CUSTOM_LENSES_KEY = "ohme:custom-lenses:v1";
+
+export type CustomLensInput = Pick<
+  LensOption,
+  "name" | "shortDescription" | "domains" | "sees" | "ignores" | "explainsPainAs" | "coreQuestions" | "explorationMoves" | "risks"
+>;
+
+export function readCustomLenses(): LensOption[] {
+  if (typeof window === "undefined") return [];
+
+  const raw = window.localStorage.getItem(CUSTOM_LENSES_KEY);
+  if (!raw) return [];
+
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveCustomLens(input: CustomLensInput): LensOption {
+  const nextLens: LensOption = {
+    ...input,
+    id: `custom-${Date.now()}`,
+    color: "bg-fuchsia-500",
+    bg: "bg-fuchsia-500/10 text-fuchsia-700 dark:text-fuchsia-300",
+    domains: input.domains,
+    sees: input.sees,
+    ignores: input.ignores || [],
+    coreQuestions: input.coreQuestions || [],
+    explorationMoves: input.explorationMoves || [],
+    risks: input.risks || [],
+    isCustom: true,
+  };
+
+  const lenses = readCustomLenses();
+  window.localStorage.setItem(CUSTOM_LENSES_KEY, JSON.stringify([nextLens, ...lenses]));
+  return nextLens;
+}
+
+export function deleteCustomLens(id: string): void {
+  const lenses = readCustomLenses().filter((lens) => lens.id !== id);
+  window.localStorage.setItem(CUSTOM_LENSES_KEY, JSON.stringify(lenses));
+}
+
+export function getAllLensOptions(): LensOption[] {
+  return [...LENS_OPTIONS, ...readCustomLenses()];
+}
+
+export function getCustomLensPayload(ids: string[]) {
+  return readCustomLenses()
+    .filter((lens) => ids.includes(lens.id))
+    .map((lens) => ({
+      id: lens.id,
+      name: lens.name,
+      shortDescription: lens.shortDescription,
+      sees: lens.sees,
+      ignores: lens.ignores || [],
+      explainsPainAs: lens.explainsPainAs || lens.shortDescription,
+      coreQuestions: lens.coreQuestions || [],
+      explorationMoves: lens.explorationMoves || [],
+      risks: lens.risks || [],
+    }));
 }

@@ -82,3 +82,32 @@ export const LENSES: LensDefinition[] = [
 export function findLens(id: string): LensDefinition | undefined {
   return LENSES.find((lens) => lens.id === id);
 }
+
+export function normalizeLens(input: unknown): LensDefinition | undefined {
+  if (!input || typeof input !== 'object') return undefined;
+
+  const lens = input as Partial<LensDefinition>;
+  if (!lens.id || !lens.name || !lens.shortDescription || !Array.isArray(lens.sees)) {
+    return undefined;
+  }
+
+  return {
+    id: String(lens.id),
+    name: String(lens.name),
+    shortDescription: String(lens.shortDescription),
+    sees: lens.sees.map(String).filter(Boolean),
+    ignores: Array.isArray(lens.ignores) ? lens.ignores.map(String).filter(Boolean) : [],
+    explainsPainAs: lens.explainsPainAs ? String(lens.explainsPainAs) : String(lens.shortDescription),
+    coreQuestions: Array.isArray(lens.coreQuestions) ? lens.coreQuestions.map(String).filter(Boolean) : [],
+    explorationMoves: Array.isArray(lens.explorationMoves) ? lens.explorationMoves.map(String).filter(Boolean) : [],
+    risks: Array.isArray(lens.risks) ? lens.risks.map(String).filter(Boolean) : [],
+  };
+}
+
+export function findLensFromRequest(id: string, customLenses?: unknown[]): LensDefinition | undefined {
+  const custom = customLenses
+    ?.map((lens) => normalizeLens(lens))
+    .find((lens): lens is LensDefinition => lens !== undefined && lens.id === id);
+
+  return custom ?? findLens(id);
+}

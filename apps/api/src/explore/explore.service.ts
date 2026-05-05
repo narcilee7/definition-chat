@@ -1,12 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { LLMFallbackService } from '../llm/llm-fallback.service';
-import { findLens, LensDefinition } from '../lenses/lens-definitions';
+import { findLens, LensDefinition, normalizeLens } from '../lenses/lens-definitions';
 
 export interface ExploreRequest {
   lensId: string;
   question: string;
   userResponse?: string;
   hypothesis?: string;
+  customLens?: unknown;
 }
 
 export interface ExploreResponse {
@@ -22,7 +23,8 @@ export class ExploreService {
   constructor(private llm: LLMFallbackService) {}
 
   async explore(data: ExploreRequest): Promise<ExploreResponse> {
-    const lens = findLens(data.lensId) ?? findLens('cognitive-judgment');
+    const customLens = normalizeLens(data.customLens);
+    const lens = customLens?.id === data.lensId ? customLens : findLens(data.lensId) ?? findLens('cognitive-judgment');
     if (!lens) {
       throw new Error('No Lens available');
     }

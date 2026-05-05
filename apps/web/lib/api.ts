@@ -56,11 +56,11 @@ export const api = {
       fetchJson<any>(`/api/safety-plans/${userId}`, { method: "POST", body: JSON.stringify(data) }),
   },
   refraction: {
-    analyze: (data: { userId: string; question: string; lensIds?: string[]; approachIds?: string[] }) =>
+    analyze: (data: { userId: string; question: string; lensIds?: string[]; approachIds?: string[]; customLenses?: unknown[] }) =>
       fetchJson<any>("/api/refraction", { method: "POST", body: JSON.stringify(data) }),
   },
   explore: {
-    run: (data: { lensId: string; question: string; userResponse?: string; hypothesis?: string }) =>
+    run: (data: { lensId: string; question: string; userResponse?: string; hypothesis?: string; customLens?: unknown }) =>
       fetchJson<any>("/api/explore", { method: "POST", body: JSON.stringify(data) }),
   },
   builder: {
